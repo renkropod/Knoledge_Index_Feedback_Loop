@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# IDE settings
+.idea/
+.vscode/
+
+# Project artifacts
+knowledge_base/vectors/
+knowledge_base/graph/*.json
+knowledge_base/graph/*.graphml
+knowledge_base/temporal/
+
+# Packaging/build
+build/
+dist/
+*.egg-info/
+
+# Test/cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

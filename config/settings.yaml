@@ -1,0 +1,21 @@
+llm:
+  api_key_env: ANTHROPIC_API_KEY
+  extraction_model: claude-3-5-sonnet-20241022
+  generation_model: claude-sonnet-4-20250514
+
+storage:
+  graph_path: knowledge_base/graph/kg.json
+  vector_path: knowledge_base/vectors
+  temporal_path: knowledge_base/temporal/facts.jsonl
+
+embedding:
+  model_name: BAAI/bge-m3
+  device: cpu
+
+research:
+  default_topics:
+    - AI governance
+    - retrieval-augmented generation
+    - autonomous research agents
+  max_sources: 15
+  schedule_cron: "0 */6 * * *"
