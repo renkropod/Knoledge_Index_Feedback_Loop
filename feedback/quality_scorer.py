@@ -2,17 +2,23 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Mapping
+from typing import Sequence
+from typing import cast
+
+
+DocLike = Mapping[str, object]
 
 
 @dataclass
 class QualityReport:
     score: float
-    metrics: dict
+    metrics: dict[str, float]
     suggestions: list[str]
 
 
 class QualityScorer:
-    ANALYSIS_MARKERS = (
+    ANALYSIS_MARKERS: tuple[str, ...] = (
         "따라서",
         "분석 결과",
         "이는 의미한다",
@@ -24,17 +30,34 @@ class QualityScorer:
         "this suggests",
     )
 
-    INTRO_MARKERS = ("요약", "개요", "배경", "문제", "목표", "introduction")
-    CONCLUSION_MARKERS = ("결론", "정리", "제언", "후속", "한계", "conclusion")
+    INTRO_MARKERS: tuple[str, ...] = (
+        "요약",
+        "개요",
+        "배경",
+        "문제",
+        "목표",
+        "introduction",
+    )
+    CONCLUSION_MARKERS: tuple[str, ...] = (
+        "결론",
+        "정리",
+        "제언",
+        "후속",
+        "한계",
+        "conclusion",
+    )
 
     def __init__(self):
         pass
 
     def score(
-        self, output_text: str, context_docs: list[dict], query: str
+        self,
+        output_text: str,
+        context_docs: list[dict[str, object]],
+        query: str,
     ) -> QualityReport:
         safe_text = (output_text or "").strip()
-        safe_docs = context_docs or []
+        safe_docs: Sequence[DocLike] = context_docs if context_docs else []
         safe_query = query or ""
 
         source_coverage = self._source_coverage_score(safe_text, safe_docs)
@@ -43,7 +66,7 @@ class QualityScorer:
         novelty = self._novelty_score(safe_text, safe_docs)
         coherence = self._coherence_score(safe_text)
 
-        metrics = {
+        metrics: dict[str, float] = {
             "source_coverage": source_coverage,
             "length_adequacy": length_adequacy,
             "factual_grounding": factual_grounding,
@@ -51,7 +74,7 @@ class QualityScorer:
             "coherence": coherence,
         }
 
-        weights = {
+        weights: dict[str, float] = {
             "source_coverage": 0.25,
             "length_adequacy": 0.15,
             "factual_grounding": 0.25,
@@ -69,7 +92,7 @@ class QualityScorer:
         )
 
     def _source_coverage_score(
-        self, output_text: str, context_docs: list[dict]
+        self, output_text: str, context_docs: Sequence[DocLike]
     ) -> float:
         if not context_docs:
             return 1.0
@@ -116,7 +139,9 @@ class QualityScorer:
         taper = min(length - 5000, 5000)
         return self._clamp(1.0 - 0.25 * (taper / 5000.0))
 
-    def _novelty_score(self, output_text: str, context_docs: list[dict]) -> float:
+    def _novelty_score(
+        self, output_text: str, context_docs: Sequence[DocLike]
+    ) -> float:
         text_lower = output_text.lower()
         markers_found = sum(
             1 for marker in self.ANALYSIS_MARKERS if marker.lower() in text_lower
@@ -172,7 +197,7 @@ class QualityScorer:
         )
 
     def _factual_grounding_score(
-        self, output_text: str, context_docs: list[dict]
+        self, output_text: str, context_docs: Sequence[DocLike]
     ) -> float:
         sentences = [
             s.strip()
@@ -182,18 +207,18 @@ class QualityScorer:
         if not sentences:
             return 0.0
 
-        refs = []
+        refs: list[str] = []
         for doc in context_docs:
             refs.extend(self._doc_reference_tokens(doc))
-        refs = [item.lower() for item in refs if item]
+        lowered_refs = [item.lower() for item in refs]
 
-        if not refs:
+        if not lowered_refs:
             return 0.5
 
         backed = 0
         for sentence in sentences:
             sentence_lower = sentence.lower()
-            has_ref = any(token in sentence_lower for token in refs)
+            has_ref = any(token in sentence_lower for token in lowered_refs)
             has_citation_pattern = bool(
                 re.search(r"\[(?:\d+|source|ref|doc)\]", sentence_lower)
             )
@@ -228,10 +253,8 @@ class QualityScorer:
         return suggestions
 
     @staticmethod
-    def _doc_reference_tokens(doc: dict) -> list[str]:
+    def _doc_reference_tokens(doc: DocLike) -> list[str]:
         tokens: list[str] = []
-        if not isinstance(doc, dict):
-            return tokens
 
         for key in ("id", "doc_id", "title", "source_doc"):
             value = doc.get(key)
@@ -240,8 +263,9 @@ class QualityScorer:
 
         metadata = doc.get("metadata")
         if isinstance(metadata, dict):
+            metadata_map = cast(dict[str, object], metadata)
             for key in ("id", "doc_id", "title", "source_doc"):
-                value = metadata.get(key)
+                value = metadata_map.get(key)
                 if isinstance(value, str) and value.strip():
                     tokens.append(value.strip())
 

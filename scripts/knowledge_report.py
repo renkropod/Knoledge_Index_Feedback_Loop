@@ -10,7 +10,11 @@ from config import Settings
 from storage import KnowledgeGraph, TemporalFactStore, VectorStore
 
 
-def generate_report(graph_store, vector_store, temporal_store) -> dict:
+def generate_report(
+    graph_store: KnowledgeGraph,
+    vector_store: VectorStore,
+    temporal_store: TemporalFactStore,
+) -> dict[str, int]:
     graph_stats = graph_store.get_stats()
     vector_stats = vector_store.get_stats()
     temporal_stats = temporal_store.get_stats()
@@ -35,7 +39,7 @@ def generate_report(graph_store, vector_store, temporal_store) -> dict:
     }
 
 
-def print_report(report: dict):
+def print_report(report: dict[str, int]):
     print("Knowledge Base Status Report")
     print("-" * 36)
     print(f"total_entities    : {report.get('total_entities', 0)}")

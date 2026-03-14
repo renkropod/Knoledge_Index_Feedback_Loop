@@ -2,30 +2,71 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any
+from datetime import timezone
+from typing import Mapping
+from typing import Protocol
+from typing import cast
+
+
+class GraphStoreLike(Protocol):
+    def incremental_update(
+        self,
+        entities: list[dict[str, object]],
+        relations: list[dict[str, object]],
+        source_doc: str,
+        timestamp: datetime | None = None,
+    ) -> dict[str, int]: ...
+
+    def add_meta_relation(self, source: str, target: str, relation: str) -> None: ...
+
+
+class VectorStoreLike(Protocol):
+    async def upsert(
+        self,
+        doc_id: str,
+        text: str,
+        metadata: dict[str, str | int | float | bool] | None = None,
+    ) -> None: ...
+
+
+class EntityExtractorLike(Protocol):
+    async def extract_with_insight_filter(
+        self,
+        text: str,
+        prompt_modifier: str = "",
+    ) -> dict[str, list[dict[str, object]]]: ...
 
 
 class OutputIndexer:
-    def __init__(self, graph_store, vector_store, temporal_store, entity_extractor):
+    graph_store: GraphStoreLike
+    vector_store: VectorStoreLike
+    temporal_store: object
+    entity_extractor: EntityExtractorLike
+
+    def __init__(
+        self,
+        graph_store: GraphStoreLike,
+        vector_store: VectorStoreLike,
+        temporal_store: object,
+        entity_extractor: EntityExtractorLike,
+    ):
         self.graph_store = graph_store
         self.vector_store = vector_store
         self.temporal_store = temporal_store
         self.entity_extractor = entity_extractor
 
-    async def index_output(self, output_text: str, metadata: dict) -> dict:
-        metadata = dict(metadata or {})
-        timestamp = self._resolve_timestamp(metadata.get("timestamp"))
+    async def index_output(
+        self, output_text: str, metadata: dict[str, object] | None
+    ) -> dict[str, int | bool]:
+        metadata_payload: dict[str, object] = dict(metadata or {})
+        timestamp = self._resolve_timestamp(metadata_payload.get("timestamp"))
         output_id = f"agent_output_{timestamp}"
 
         extraction = await self.entity_extractor.extract_with_insight_filter(
             output_text
         )
-        entities = (
-            extraction.get("entities", []) if isinstance(extraction, dict) else []
-        )
-        relations = (
-            extraction.get("relations", []) if isinstance(extraction, dict) else []
-        )
+        entities = extraction.get("entities", [])
+        relations = extraction.get("relations", [])
 
         graph_stats = self.graph_store.incremental_update(
             entities=entities,
@@ -34,11 +75,11 @@ class OutputIndexer:
             timestamp=datetime.fromisoformat(timestamp),
         )
 
-        referenced_docs = metadata.get("referenced_docs", [])
-        if not isinstance(referenced_docs, list):
-            referenced_docs = []
+        referenced_docs = self._normalize_referenced_docs(
+            metadata_payload.get("referenced_docs")
+        )
 
-        vector_metadata = self._build_vector_metadata(metadata, output_id)
+        vector_metadata = self._build_vector_metadata(metadata_payload, output_id)
         await self.vector_store.upsert(output_id, output_text, vector_metadata)
 
         await self._add_derivation_links(
@@ -51,12 +92,11 @@ class OutputIndexer:
             "vector_updated": True,
         }
 
-    async def _add_derivation_links(self, output_id: str, referenced_docs: list[str]):
+    async def _add_derivation_links(
+        self, output_id: str, referenced_docs: list[str]
+    ) -> None:
         seen: set[str] = set()
         for doc_id in referenced_docs:
-            if not isinstance(doc_id, str):
-                continue
-
             clean_doc_id = doc_id.strip()
             if not clean_doc_id or clean_doc_id == output_id or clean_doc_id in seen:
                 continue
@@ -69,7 +109,7 @@ class OutputIndexer:
             )
 
     @staticmethod
-    def _resolve_timestamp(timestamp_value: Any) -> str:
+    def _resolve_timestamp(timestamp_value: object) -> str:
         if isinstance(timestamp_value, str):
             normalized = timestamp_value.strip().replace("Z", "+00:00")
             try:
@@ -77,23 +117,40 @@ class OutputIndexer:
             except ValueError:
                 pass
 
-        return datetime.utcnow().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
     @staticmethod
-    def _build_vector_metadata(metadata: dict, output_id: str) -> dict:
+    def _build_vector_metadata(
+        metadata: Mapping[str, object], output_id: str
+    ) -> dict[str, str | int | float | bool]:
         merged = {
             **metadata,
             "source_doc": output_id,
             "source_type": "agent_analysis",
         }
 
-        cleaned: dict[str, Any] = {}
+        cleaned: dict[str, str | int | float | bool] = {}
         for key, value in merged.items():
             if value is None:
                 continue
             if isinstance(value, (str, int, float, bool)):
-                cleaned[key] = value
+                cleaned[str(key)] = value
                 continue
-            cleaned[key] = json.dumps(value, ensure_ascii=False)
+            cleaned[str(key)] = json.dumps(value, ensure_ascii=False)
 
         return cleaned
+
+    @staticmethod
+    def _normalize_referenced_docs(referenced_docs: object) -> list[str]:
+        if not isinstance(referenced_docs, list):
+            return []
+
+        items = cast(list[object], referenced_docs)
+        normalized: list[str] = []
+        for item in items:
+            if not isinstance(item, str):
+                continue
+            clean_item = item.strip()
+            if clean_item:
+                normalized.append(clean_item)
+        return normalized
