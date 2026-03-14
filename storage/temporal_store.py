@@ -5,6 +5,7 @@ import os
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from typing import cast
 from uuid import uuid4
 
 
@@ -21,6 +22,10 @@ class TemporalFact:
 
 
 class TemporalFactStore:
+    store_path: str
+    _lock: threading.RLock
+    facts: list[TemporalFact]
+
     def __init__(self, store_path: str = "knowledge_base/temporal/facts.jsonl"):
         self.store_path = store_path
         self._lock = threading.RLock()
@@ -30,15 +35,26 @@ class TemporalFactStore:
         if not os.path.exists(self.store_path):
             return []
 
-        facts: list[TemporalFact] = []
+        facts_by_id: dict[str, TemporalFact] = {}
+        fact_order: list[str] = []
         with self._lock:
             with open(self.store_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
                         continue
-                    payload = json.loads(line)
-                    facts.append(self._dict_to_fact(payload))
+                    payload = cast(dict[str, object], json.loads(line))
+                    action = payload.get("_action")
+                    fact = self._dict_to_fact(payload)
+                    if action == "update":
+                        if fact.fact_id not in facts_by_id:
+                            fact_order.append(fact.fact_id)
+                        facts_by_id[fact.fact_id] = fact
+                        continue
+                    if fact.fact_id not in facts_by_id:
+                        fact_order.append(fact.fact_id)
+                    facts_by_id[fact.fact_id] = fact
+        facts = [facts_by_id[fact_id] for fact_id in fact_order]
         return facts
 
     def _save(self):
@@ -49,8 +65,33 @@ class TemporalFactStore:
         with self._lock:
             with open(self.store_path, "w", encoding="utf-8") as f:
                 for fact in self.facts:
-                    f.write(json.dumps(self._fact_to_dict(fact), ensure_ascii=False))
-                    f.write("\n")
+                    _ = f.write(
+                        json.dumps(self._fact_to_dict(fact), ensure_ascii=False)
+                    )
+                    _ = f.write("\n")
+
+    def _append_line(self, fact: TemporalFact):
+        store_dir = os.path.dirname(self.store_path)
+        if store_dir:
+            os.makedirs(store_dir, exist_ok=True)
+
+        with self._lock:
+            with open(self.store_path, "a", encoding="utf-8") as f:
+                _ = f.write(json.dumps(self._fact_to_dict(fact), ensure_ascii=False))
+                _ = f.write("\n")
+
+    def _append_update(self, fact: TemporalFact):
+        store_dir = os.path.dirname(self.store_path)
+        if store_dir:
+            os.makedirs(store_dir, exist_ok=True)
+
+        with self._lock:
+            with open(self.store_path, "a", encoding="utf-8") as f:
+                payload = self._fact_to_dict(fact)
+                payload["_action"] = "update"
+                payload["fact_id"] = fact.fact_id
+                _ = f.write(json.dumps(payload, ensure_ascii=False))
+                _ = f.write("\n")
 
     def add_fact(self, fact: TemporalFact):
         with self._lock:
@@ -61,12 +102,19 @@ class TemporalFactStore:
                     and existing.valid_until is None
                 ):
                     existing.valid_until = fact.valid_from
+                    self._append_update(existing)
 
             self.facts.append(fact)
             self.facts.sort(key=lambda item: item.valid_from)
+            self._append_line(fact)
+
+    def compact(self):
+        with self._lock:
             self._save()
 
-    def query_current(self, entity: str, attribute: str = None) -> list[TemporalFact]:
+    def query_current(
+        self, entity: str, attribute: str | None = None
+    ) -> list[TemporalFact]:
         return [
             fact
             for fact in self.facts
@@ -89,7 +137,7 @@ class TemporalFactStore:
         history.sort(key=lambda item: item.valid_from)
         return history
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, int]:
         unique_entities = {fact.entity for fact in self.facts}
         current_facts = [fact for fact in self.facts if fact.valid_until is None]
         return {
@@ -99,7 +147,7 @@ class TemporalFactStore:
         }
 
     @staticmethod
-    def _fact_to_dict(fact: TemporalFact) -> dict:
+    def _fact_to_dict(fact: TemporalFact) -> dict[str, object]:
         payload = asdict(fact)
         payload["valid_from"] = fact.valid_from.isoformat()
         payload["valid_until"] = (
@@ -108,19 +156,21 @@ class TemporalFactStore:
         return payload
 
     @staticmethod
-    def _dict_to_fact(payload: dict) -> TemporalFact:
-        valid_from = datetime.fromisoformat(payload["valid_from"])
+    def _dict_to_fact(payload: dict[str, object]) -> TemporalFact:
+        valid_from = datetime.fromisoformat(str(payload["valid_from"]))
         valid_until_raw = payload.get("valid_until")
         valid_until = (
-            datetime.fromisoformat(valid_until_raw) if valid_until_raw else None
+            datetime.fromisoformat(str(valid_until_raw)) if valid_until_raw else None
         )
+        fact_id_raw = payload.get("fact_id")
+        confidence_raw = payload.get("confidence", 1.0)
         return TemporalFact(
-            entity=payload["entity"],
-            attribute=payload["attribute"],
-            value=payload["value"],
-            source_doc=payload["source_doc"],
+            entity=str(payload["entity"]),
+            attribute=str(payload["attribute"]),
+            value=str(payload["value"]),
+            source_doc=str(payload["source_doc"]),
             valid_from=valid_from,
             valid_until=valid_until,
-            confidence=float(payload.get("confidence", 1.0)),
-            fact_id=payload.get("fact_id") or str(uuid4()),
+            confidence=float(str(confidence_raw)),
+            fact_id=str(fact_id_raw) if fact_id_raw else str(uuid4()),
         )

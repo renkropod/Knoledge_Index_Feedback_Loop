@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -36,10 +37,14 @@ Rules:
 
 class EntityExtractor:
     def __init__(
-        self, llm_client: Any, model: str = "claude-sonnet-4-20250514"
+        self,
+        llm_client: Any,
+        model: str = "claude-sonnet-4-20250514",
+        max_concurrent: int = 3,
     ) -> None:
         self.llm_client = llm_client
         self.model = model
+        self._max_concurrent = max_concurrent
         self.base_prompt = self._load_prompt()
 
     async def extract(
@@ -100,13 +105,20 @@ class EntityExtractor:
         chunks = self._split_text(text=text, chunk_size=chunk_size, overlap=200)
         merged_entities: List[Dict[str, Any]] = []
         merged_relations: List[Dict[str, Any]] = []
+        semaphore = asyncio.Semaphore(self._max_concurrent)
 
-        for chunk_index, chunk in enumerate(chunks):
-            payload = await self._extract_chunk_with_retries(
+        tasks = [
+            self._extract_single_chunk(
                 chunk=chunk,
                 chunk_index=chunk_index,
                 prompt_modifier=prompt_modifier,
+                semaphore=semaphore,
             )
+            for chunk_index, chunk in enumerate(chunks)
+        ]
+        results = await asyncio.gather(*tasks)
+
+        for chunk_index, payload in results:
             if not payload:
                 continue
 
@@ -129,6 +141,21 @@ class EntityExtractor:
                     merged_relations.append(relation)
 
         return {"entities": merged_entities, "relations": merged_relations}
+
+    async def _extract_single_chunk(
+        self,
+        chunk: str,
+        chunk_index: int,
+        prompt_modifier: str,
+        semaphore: asyncio.Semaphore,
+    ) -> tuple[int, Optional[Dict[str, Any]]]:
+        async with semaphore:
+            payload = await self._extract_chunk_with_retries(
+                chunk=chunk,
+                chunk_index=chunk_index,
+                prompt_modifier=prompt_modifier,
+            )
+        return chunk_index, payload
 
     async def _extract_chunk_with_retries(
         self,

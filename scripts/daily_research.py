@@ -268,7 +268,7 @@ async def _reindex_previous_outputs(
             output_text=parsed.content,
             metadata={
                 "timestamp": frontmatter.get(
-                    "generated_at", datetime.utcnow().isoformat()
+                    "generated_at", datetime.now(tz=timezone.utc).isoformat()
                 ),
                 "referenced_docs": references,
                 "origin_doc": str(path),

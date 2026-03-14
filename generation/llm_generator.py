@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from anthropic import AsyncAnthropic
 
@@ -53,7 +53,7 @@ class LLMGenerator:
             referenced_docs=self._extract_referenced_docs(context),
             token_usage=token_usage,
             model=str(getattr(response, "model", self.model)),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
         )
 
     async def generate_research_report(
@@ -94,7 +94,7 @@ class LLMGenerator:
             referenced_docs=self._extract_referenced_docs(context),
             token_usage=token_usage,
             model=str(getattr(response, "model", self.model)),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
         )
 
     @staticmethod

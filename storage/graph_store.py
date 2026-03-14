@@ -5,7 +5,7 @@ import os
 import tempfile
 import threading
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import networkx as nx
@@ -52,7 +52,7 @@ class KnowledgeGraph:
         source_doc: str,
         timestamp: datetime | None = None,
     ) -> dict:
-        now = (timestamp or datetime.utcnow()).isoformat()
+        now = (timestamp or datetime.now(tz=timezone.utc)).isoformat()
         stats = {
             "nodes_added": 0,
             "edges_added": 0,
@@ -169,7 +169,7 @@ class KnowledgeGraph:
         return stats
 
     def add_meta_relation(self, source: str, target: str, relation: str):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(tz=timezone.utc).isoformat()
         with self._lock:
             if not self.graph.has_node(source):
                 self.graph.add_node(

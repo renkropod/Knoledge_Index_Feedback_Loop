@@ -95,9 +95,7 @@ class Settings:
             ),
             temporal_path=_env_str(
                 "GAKMS_STORAGE_TEMPORAL_PATH",
-                storage_raw.get(
-                    "temporal_path", "knowledge_base/temporal/events.jsonl"
-                ),
+                storage_raw.get("temporal_path", "knowledge_base/temporal/facts.jsonl"),
             ),
         )
 
