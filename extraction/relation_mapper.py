@@ -16,8 +16,14 @@ class RelationMapper:
         relations: list[dict[str, Any]] = []
         seen_pairs: set[tuple[int, str, str]] = set()
 
+        max_per_chunk = 15
+
         for chunk_index, group in grouped.items():
+            chunk_count = 0
             for left, right in combinations(group, 2):
+                if chunk_count >= max_per_chunk:
+                    break
+
                 source = str(left.get("name", "")).strip()
                 target = str(right.get("name", "")).strip()
                 if not source or not target or source == target:
@@ -39,6 +45,7 @@ class RelationMapper:
                         "chunk_index": chunk_index,
                     }
                 )
+                chunk_count += 1
 
         return relations
 
