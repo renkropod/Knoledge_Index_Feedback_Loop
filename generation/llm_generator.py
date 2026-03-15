@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from anthropic import AsyncAnthropic
+from typing import Any
 
 
 @dataclass
@@ -19,7 +19,7 @@ class GenerationResult:
 class LLMGenerator:
     def __init__(
         self,
-        llm_client: AsyncAnthropic,
+        llm_client: Any,
         model: str = "claude-sonnet-4-20250514",
         max_tokens: int = 1200,
     ):

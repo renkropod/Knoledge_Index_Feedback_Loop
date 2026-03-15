@@ -156,7 +156,7 @@ class WebResearcher:
         encoded_query = quote_plus(query)
         search_url = f"https://duckduckgo.com/html/?q={encoded_query}"
 
-        html = await self._fetch_url_with_session(session, search_url)
+        html = await self._fetch_raw_html(session, search_url)
         if not html:
             return []
 
@@ -182,6 +182,18 @@ class WebResearcher:
                 break
 
         return results
+
+    async def _fetch_raw_html(self, session: aiohttp.ClientSession, url: str) -> str:
+        try:
+            async with self._semaphore:
+                async with session.get(url, allow_redirects=True) as response:
+                    if response.status >= 400:
+                        return ""
+                    return await response.text(errors="ignore")
+        except (asyncio.TimeoutError, aiohttp.ClientError):
+            return ""
+        except Exception:
+            return ""
 
     async def _fetch_url_with_session(
         self, session: aiohttp.ClientSession, url: str

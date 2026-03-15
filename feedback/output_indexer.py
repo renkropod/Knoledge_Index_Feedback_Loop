@@ -80,6 +80,12 @@ class OutputIndexer:
             timestamp=parsed_timestamp,
         )
 
+        self._index_temporal_facts(
+            entities=entities,
+            source_doc=output_id,
+            timestamp=parsed_timestamp,
+        )
+
         referenced_docs = self._normalize_referenced_docs(
             metadata_payload.get("referenced_docs")
         )
@@ -111,6 +117,33 @@ class OutputIndexer:
                 source=output_id,
                 target=clean_doc_id,
                 relation="DERIVED_FROM",
+            )
+
+    def _index_temporal_facts(
+        self,
+        entities: list[dict[str, object]],
+        source_doc: str,
+        timestamp: datetime,
+    ) -> None:
+        if not hasattr(self.temporal_store, "add_fact"):
+            return
+        try:
+            from storage.temporal_store import TemporalFact
+        except ImportError:
+            return
+        for entity in entities:
+            name = str(entity.get("name", "")).strip()
+            etype = str(entity.get("type", "")).strip()
+            if not name or not etype:
+                continue
+            self.temporal_store.add_fact(
+                TemporalFact(
+                    entity=name,
+                    attribute="entity_type",
+                    value=etype,
+                    source_doc=source_doc,
+                    valid_from=timestamp,
+                )
             )
 
     @staticmethod

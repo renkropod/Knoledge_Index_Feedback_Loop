@@ -47,19 +47,17 @@ async def daily_pipeline(topics: Optional[list[str]] = None):
             "No research topics available. Configure settings.yaml or pass topics via CLI."
         )
 
-    if not settings.llm_api_key:
-        raise RuntimeError(
-            f"Missing API key. Set {settings.llm.api_key_env} in your environment or .env file."
-        )
+    from config.llm_client import create_llm_client, get_model_name
 
-    anthropic_mod = importlib.import_module("anthropic")
-    llm_client = anthropic_mod.AsyncAnthropic(api_key=settings.llm_api_key)
+    llm_client = create_llm_client(api_key=settings.llm_api_key or "")
+    model_name = get_model_name(
+        api_key=settings.llm_api_key or "",
+        default=settings.llm.extraction_model,
+    )
     researcher = WebResearcher(
         llm_client=llm_client, max_sources=settings.research.max_sources
     )
-    extractor = EntityExtractor(
-        llm_client=llm_client, model=settings.llm.extraction_model
-    )
+    extractor = EntityExtractor(llm_client=llm_client, model=model_name)
     deduplicator = Deduplicator()
     relation_mapper = RelationMapper()
     graph_store = KnowledgeGraph(settings.storage.graph_path)
