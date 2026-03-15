@@ -84,11 +84,23 @@ class DualLevelRetriever:
 
         entities: list[str] = []
         seen: set[str] = set()
+
+        full_query_matches = self.graph_store.search_entities(query)
+        for match in full_query_matches:
+            entity = str(match.get("entity", "")).strip()
+            if entity and entity not in seen and match.get("score", 0) >= 2:
+                seen.add(entity)
+                entities.append(entity)
+
         for token in tokens:
+            if len(token) < 3:
+                continue
             matches = self.graph_store.search_entities(token)
             for match in matches:
                 entity = str(match.get("entity", "")).strip()
                 if not entity or entity in seen:
+                    continue
+                if match.get("score", 0) < 2:
                     continue
                 seen.add(entity)
                 entities.append(entity)
