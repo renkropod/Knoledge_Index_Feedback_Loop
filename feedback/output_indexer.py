@@ -68,11 +68,16 @@ class OutputIndexer:
         entities = extraction.get("entities", [])
         relations = extraction.get("relations", [])
 
+        try:
+            parsed_timestamp = datetime.fromisoformat(timestamp)
+        except (ValueError, TypeError):
+            parsed_timestamp = datetime.now(timezone.utc)
+
         graph_stats = self.graph_store.incremental_update(
             entities=entities,
             relations=relations,
             source_doc=output_id,
-            timestamp=datetime.fromisoformat(timestamp),
+            timestamp=parsed_timestamp,
         )
 
         referenced_docs = self._normalize_referenced_docs(

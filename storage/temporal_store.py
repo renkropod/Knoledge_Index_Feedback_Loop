@@ -38,22 +38,38 @@ class TemporalFactStore:
         facts_by_id: dict[str, TemporalFact] = {}
         fact_order: list[str] = []
         with self._lock:
-            with open(self.store_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    payload = cast(dict[str, object], json.loads(line))
-                    action = payload.get("_action")
-                    fact = self._dict_to_fact(payload)
-                    if action == "update":
+            try:
+                with open(self.store_path, "r", encoding="utf-8") as f:
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            payload = cast(dict[str, object], json.loads(line))
+                        except json.JSONDecodeError:
+                            import logging
+
+                            logging.getLogger(__name__).warning(
+                                "Skipping malformed line %d in %s",
+                                line_num,
+                                self.store_path,
+                            )
+                            continue
+                        action = payload.get("_action")
+                        try:
+                            fact = self._dict_to_fact(payload)
+                        except (KeyError, ValueError, TypeError):
+                            continue
+                        if action == "update":
+                            if fact.fact_id not in facts_by_id:
+                                fact_order.append(fact.fact_id)
+                            facts_by_id[fact.fact_id] = fact
+                            continue
                         if fact.fact_id not in facts_by_id:
                             fact_order.append(fact.fact_id)
                         facts_by_id[fact.fact_id] = fact
-                        continue
-                    if fact.fact_id not in facts_by_id:
-                        fact_order.append(fact.fact_id)
-                    facts_by_id[fact.fact_id] = fact
+            except OSError:
+                return []
         facts = [facts_by_id[fact_id] for fact_id in fact_order]
         return facts
 

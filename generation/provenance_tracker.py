@@ -22,6 +22,8 @@ class ProvenanceRecord:
 
 
 class ProvenanceTracker:
+    MAX_RECORDS = 500
+
     def __init__(self, store_path: str = "knowledge_base/provenance/records.jsonl"):
         self.store_path = store_path
         self._lock = threading.RLock()
@@ -47,6 +49,8 @@ class ProvenanceTracker:
 
         with self._lock:
             self.records.append(provenance)
+            if len(self.records) > self.MAX_RECORDS:
+                self.records = self.records[-self.MAX_RECORDS :]
             self._save()
         return provenance
 
@@ -69,14 +73,20 @@ class ProvenanceTracker:
 
         records: list[ProvenanceRecord] = []
         with self._lock:
-            with open(self.store_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    payload = json.loads(line)
-                    records.append(self._dict_to_record(payload))
-        return records
+            try:
+                with open(self.store_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            payload = json.loads(line)
+                            records.append(self._dict_to_record(payload))
+                        except (json.JSONDecodeError, KeyError, ValueError):
+                            continue
+            except OSError:
+                return []
+        return records[-self.MAX_RECORDS :]
 
     def _save(self):
         store_dir = os.path.dirname(self.store_path)

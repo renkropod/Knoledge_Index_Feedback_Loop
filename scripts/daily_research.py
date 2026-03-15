@@ -258,11 +258,12 @@ async def _reindex_previous_outputs(
         if not parsed.content.strip():
             continue
 
-        references = [
-            src.get("url", "")
-            for src in frontmatter.get("sources", [])
-            if isinstance(src, dict) and src.get("url")
-        ]
+        references = [str(path)]
+        for src in frontmatter.get("sources", []):
+            if isinstance(src, dict):
+                title = src.get("title", "")
+                if title:
+                    references.append(title)
 
         await output_indexer.index_output(
             output_text=parsed.content,

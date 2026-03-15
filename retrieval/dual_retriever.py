@@ -165,7 +165,13 @@ class DualLevelRetriever:
 
         for item in vector_results:
             metadata = item.get("metadata") or {}
-            entity = str(metadata.get("entity") or item.get("id") or "").strip()
+            entity = str(
+                metadata.get("entity")
+                or metadata.get("title")
+                or metadata.get("topic")
+                or item.get("id")
+                or ""
+            ).strip()
             source_doc = str(metadata.get("source_doc") or item.get("id") or "unknown")
             timestamp = metadata.get("timestamp")
 

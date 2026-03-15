@@ -21,10 +21,20 @@ class KnowledgeGraph:
         if not os.path.exists(self.graph_path):
             return nx.DiGraph()
 
-        with self._lock:
-            with open(self.graph_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return nx.node_link_graph(data, directed=True, edges="edges")
+        try:
+            with self._lock:
+                with open(self.graph_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return nx.node_link_graph(data, directed=True, edges="edges")
+        except (json.JSONDecodeError, KeyError, OSError) as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Failed to load graph from %s: %s — starting fresh",
+                self.graph_path,
+                exc,
+            )
+            return nx.DiGraph()
 
     def _save(self):
         graph_dir = os.path.dirname(self.graph_path)
@@ -100,6 +110,8 @@ class KnowledgeGraph:
                             "timestamp": now,
                         }
                     )
+                    if len(node_data["descriptions"]) > 5:
+                        node_data["descriptions"] = node_data["descriptions"][-5:]
                 node_data["type"] = node_data.get("type") or node_type
                 node_data["last_updated"] = now
                 stats["nodes_updated"] += 1
