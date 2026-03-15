@@ -547,6 +547,94 @@ async def bench_retrieval_quality() -> BenchmarkResult:
     return r
 
 
+async def bench_retrieval_metrics() -> BenchmarkResult:
+    r = BenchmarkResult("RetrievalMetrics")
+
+    settings = Settings.load()
+    kg = KnowledgeGraph(settings.storage.graph_path)
+    ts = TemporalFactStore(settings.storage.temporal_path)
+
+    hf_home = Path(__file__).resolve().parent.parent / ".cache" / "hf"
+    os.environ["HF_HOME"] = str(hf_home)
+    vs = VectorStore(
+        persist_dir=settings.storage.vector_path,
+        embedding_model=settings.embedding.model_name,
+    )
+    retriever = DualLevelRetriever(graph_store=kg, vector_store=vs, temporal_store=ts)
+
+    ks = [1, 3, 5, 10]
+    recall_totals = {k: 0.0 for k in ks}
+    mrr_total = 0.0
+    latencies = []
+
+    for gt in GROUND_TRUTH_QUERIES:
+        query = str(gt["query"])
+        expected_entities = [str(e).lower() for e in gt["expected_entities"]]
+        expected_keywords = [str(kw).lower() for kw in gt["expected_keywords"]]
+
+        t0 = time.perf_counter()
+        results = await retriever.retrieve(query=query, top_k=10, mode="hybrid")
+        elapsed = time.perf_counter() - t0
+        latencies.append(elapsed)
+
+        normalized_results = [
+            (str(res.get("text", "")) + " " + str(res.get("entity", ""))).lower()
+            for res in results
+        ]
+
+        first_relevant_rank = 0
+        for idx, combined in enumerate(normalized_results, start=1):
+            if any(kw in combined for kw in expected_keywords):
+                first_relevant_rank = idx
+                break
+
+        per_query_recalls = {}
+        relevant_denominator = max(len(expected_entities), 1)
+        for k in ks:
+            retrieved_at_k = normalized_results[:k]
+            matched_entities = {
+                expected_entity
+                for expected_entity in expected_entities
+                if any(expected_entity in combined for combined in retrieved_at_k)
+            }
+            recall_k = len(matched_entities) / relevant_denominator
+            per_query_recalls[k] = recall_k
+            recall_totals[k] += recall_k
+
+        mrr = (1 / first_relevant_rank) if first_relevant_rank > 0 else 0.0
+        mrr_total += mrr
+
+        top_entity = results[0].get("entity", "?") if results else "none"
+        r.add(
+            f"metrics: {query[:35]}",
+            True,
+            elapsed,
+            (
+                f"R@1={per_query_recalls[1]:.0%}, R@3={per_query_recalls[3]:.0%}, "
+                f"R@5={per_query_recalls[5]:.0%}, R@10={per_query_recalls[10]:.0%}, "
+                f"MRR={mrr:.3f}, first_rank={first_relevant_rank or 'none'}, top={top_entity}"
+            ),
+            score=mrr,
+        )
+
+    n = max(len(GROUND_TRUTH_QUERIES), 1)
+    avg_recalls = {k: (recall_totals[k] / n) for k in ks}
+    avg_mrr = mrr_total / n
+    avg_latency = sum(latencies) / len(latencies) if latencies else 0.0
+
+    for k in ks:
+        r.add(
+            f"avg_recall@{k}",
+            True,
+            avg_latency,
+            f"avg={avg_recalls[k]:.0%}",
+            score=avg_recalls[k],
+        )
+    r.add("avg_mrr", True, avg_latency, f"avg={avg_mrr:.3f}", score=avg_mrr)
+
+    return r
+
+
 async def bench_end_to_end(vllm_ready: bool) -> BenchmarkResult:
     r = BenchmarkResult("EndToEnd")
 
@@ -628,6 +716,7 @@ async def main():
         ("EntityExtraction", lambda: bench_entity_extraction(vllm_ready)),
         ("Storage", bench_storage),
         ("RetrievalQuality", bench_retrieval_quality),
+        ("RetrievalMetrics", bench_retrieval_metrics),
         ("EndToEnd", lambda: bench_end_to_end(vllm_ready)),
     ]
 

@@ -27,8 +27,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import Settings
 from extraction import Deduplicator, EntityExtractor, RelationMapper
+from feedback import QualityScorer
 from feedback.output_indexer import OutputIndexer
+from generation import LLMGenerator, ProvenanceTracker
 from ingestion import DocumentParser, ResearchResult, WebResearcher
+from retrieval import ContextAssembler, DualLevelRetriever
 from scripts.knowledge_report import generate_report, print_report
 from storage import KnowledgeGraph, TemporalFactStore, VectorStore
 from storage.temporal_store import TemporalFact
@@ -73,6 +76,15 @@ async def daily_pipeline(topics: Optional[list[str]] = None):
         entity_extractor=extractor,
     )
     parser = DocumentParser()
+    quality_scorer = QualityScorer()
+    provenance_tracker = ProvenanceTracker()
+    generator = LLMGenerator(llm_client=llm_client, model=model_name)
+    retriever = DualLevelRetriever(
+        graph_store=graph_store,
+        vector_store=vector_store,
+        temporal_store=temporal_store,
+    )
+    assembler = ContextAssembler(max_context_tokens=4000)
 
     print(f"[{datetime.now().isoformat(timespec='seconds')}] Daily research start")
     print(f"Topics: {', '.join(topic_list)}")
@@ -144,6 +156,43 @@ async def daily_pipeline(topics: Optional[list[str]] = None):
             f"+{graph_stats.get('edges_added', 0)} relations"
         )
         print(f"  - Temporal facts added: {facts_added}")
+
+        context_docs = [
+            {"text": result.text, "source_doc": doc_path, "title": result.topic}
+        ]
+        quality_report = quality_scorer.score(
+            output_text=result.text,
+            context_docs=context_docs,
+            query=topic,
+        )
+        print(
+            f"  - Quality: {quality_report.score:.2f} "
+            f"(coverage={quality_report.metrics.get('source_coverage', 0):.2f}, "
+            f"grounding={quality_report.metrics.get('factual_grounding', 0):.2f})"
+        )
+        if quality_report.suggestions:
+            for suggestion in quality_report.suggestions[:2]:
+                print(f"    💡 {suggestion}")
+
+    if pipeline_stats["topics_processed"] > 0:
+        print("\n  Generating synthesis report...")
+        try:
+            all_topics_query = "Synthesize key findings from: " + ", ".join(topic_list)
+            retrieval_results = await retriever.retrieve(
+                query=all_topics_query, top_k=10, mode="hybrid"
+            )
+            context = assembler.assemble(retrieval_results, all_topics_query)
+            gen_result = await generator.generate(
+                query=all_topics_query, context=context
+            )
+            provenance_tracker.record(gen_result, all_topics_query)
+            print(f"  - Generated report: {len(gen_result.text)} chars")
+            print(
+                f"  - Provenance: {len(gen_result.referenced_docs)} source refs tracked"
+            )
+            print(f"  - Token usage: {gen_result.token_usage}")
+        except Exception as exc:
+            print(f"  - Report generation skipped: {exc}")
 
     reindexed_count = await _reindex_previous_outputs(
         documents_dir=Path("knowledge_base/documents"),
