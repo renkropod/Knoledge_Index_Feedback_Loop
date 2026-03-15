@@ -318,7 +318,8 @@ class KnowledgeGraph:
             descriptions = data.get("descriptions", [])
             desc_texts = [str(item.get("text", "")) for item in descriptions]
 
-            in_name = query_lower in node_text.lower()
+            node_lower = node_text.lower()
+            in_name = query_lower in node_lower or node_lower in query_lower
             in_desc = any(query_lower in text.lower() for text in desc_texts)
             if not (in_name or in_desc):
                 continue
@@ -326,6 +327,8 @@ class KnowledgeGraph:
             score = 2 if in_name else 1
             if in_name and in_desc:
                 score = 3
+            if query_lower == node_lower:
+                score = 4
 
             matches.append(
                 {
@@ -344,7 +347,9 @@ class KnowledgeGraph:
     def _normalize_entity(entity: Any) -> dict[str, Any] | None:
         if isinstance(entity, str):
             clean_name = entity.strip()
-            return {"name": clean_name} if clean_name else None
+            if not clean_name or KnowledgeGraph._is_junk_entity(clean_name):
+                return None
+            return {"name": clean_name}
 
         if isinstance(entity, dict):
             name = (
@@ -355,8 +360,11 @@ class KnowledgeGraph:
             )
             if not name:
                 return None
+            clean_name = str(name).strip()
+            if KnowledgeGraph._is_junk_entity(clean_name):
+                return None
             return {
-                "name": str(name).strip(),
+                "name": clean_name,
                 "type": entity.get("type", "unknown"),
                 "description": (
                     entity.get("description")
@@ -367,6 +375,16 @@ class KnowledgeGraph:
             }
 
         return None
+
+    @staticmethod
+    def _is_junk_entity(name: str) -> bool:
+        if name.startswith(("http://", "https://", "ftp://", "www.")):
+            return True
+        if len(name) > 120:
+            return True
+        if len(name) < 2:
+            return True
+        return False
 
     @staticmethod
     def _normalize_relation(relation: Any) -> dict[str, Any] | None:

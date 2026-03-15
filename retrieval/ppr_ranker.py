@@ -34,14 +34,23 @@ class PPRRanker:
         except PowerIterationFailedConvergence:
             return self._assign_scores_without_ppr(candidates)
 
+        raw_ppr = {}
+        for candidate in candidates:
+            entity = candidate.get("entity")
+            raw_ppr[entity] = self._safe_float(ppr_scores.get(entity), default=0.0)
+        max_ppr = max(raw_ppr.values()) if raw_ppr else 1.0
+        if max_ppr <= 0:
+            max_ppr = 1.0
+
         ranked = []
         for candidate in candidates:
             item = dict(candidate)
             entity = item.get("entity")
             vector_score = self._safe_float(item.get("score"), default=0.0)
-            ppr_score = self._safe_float(ppr_scores.get(entity), default=0.0)
-            item["ppr_score"] = ppr_score
-            item["final_score"] = 0.6 * vector_score + 0.4 * ppr_score
+            ppr_raw = raw_ppr.get(entity, 0.0)
+            ppr_normalized = ppr_raw / max_ppr
+            item["ppr_score"] = ppr_normalized
+            item["final_score"] = 0.6 * vector_score + 0.4 * ppr_normalized
             ranked.append(item)
 
         ranked.sort(key=lambda value: value.get("final_score", 0.0), reverse=True)
