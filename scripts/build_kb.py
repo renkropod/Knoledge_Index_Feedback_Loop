@@ -309,23 +309,40 @@ async def fetch_url(session: aiohttp.ClientSession, url: str) -> str:
 
 
 async def fetch_hn_stories(
-    session: aiohttp.ClientSession, max_stories: int = 30
+    session: aiohttp.ClientSession,
+    max_stories: int = 30,
+    hours: int = 24,
 ) -> list[dict[str, Any]]:
-    top_ids_text = await fetch_url(session, f"{HN_API}/topstories.json")
-    if not top_ids_text:
-        return []
+    cutoff = time.time() - (hours * 3600)
 
-    story_ids = json.loads(top_ids_text)[:max_stories]
-    tasks = [fetch_url(session, f"{HN_API}/item/{sid}.json") for sid in story_ids]
-    responses = await asyncio.gather(*tasks)
+    all_ids: set[int] = set()
+    for endpoint in ["topstories", "newstories", "beststories"]:
+        raw = await fetch_url(session, f"{HN_API}/{endpoint}.json")
+        if raw:
+            try:
+                ids = json.loads(raw)
+                all_ids.update(ids[:200])
+            except json.JSONDecodeError:
+                pass
 
-    stories = []
-    for raw in responses:
-        if not raw:
-            continue
-        try:
-            item = json.loads(raw)
-            if item.get("type") == "story" and item.get("title"):
+    story_ids = list(all_ids)
+    batch_size = 50
+    stories: list[dict[str, Any]] = []
+
+    for batch_start in range(0, len(story_ids), batch_size):
+        batch = story_ids[batch_start : batch_start + batch_size]
+        tasks = [fetch_url(session, f"{HN_API}/item/{sid}.json") for sid in batch]
+        responses = await asyncio.gather(*tasks)
+
+        for raw in responses:
+            if not raw:
+                continue
+            try:
+                item = json.loads(raw)
+                if item.get("type") != "story" or not item.get("title"):
+                    continue
+                if item.get("time", 0) < cutoff:
+                    continue
                 stories.append(
                     {
                         "title": item["title"],
@@ -337,9 +354,14 @@ async def fetch_hn_stories(
                         "descendants": item.get("descendants", 0),
                     }
                 )
-        except (json.JSONDecodeError, KeyError):
-            continue
-    return stories
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+        if len(stories) >= max_stories:
+            break
+
+    stories.sort(key=lambda s: s.get("score", 0), reverse=True)
+    return stories[:max_stories]
 
 
 async def fetch_article_text(session: aiohttp.ClientSession, url: str) -> str:
@@ -414,14 +436,14 @@ async def build_knowledge_base():
     }
 
     async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-        with PerfTimer("1. Fetch HN stories (API)") as t:
-            hn_stories = await fetch_hn_stories(session, max_stories=30)
+        with PerfTimer("1. Fetch HN stories (API, 24h)") as t:
+            hn_stories = await fetch_hn_stories(session, max_stories=100, hours=24)
         timers["hn_fetch"] = t.elapsed
         total_stats["sources_fetched"] += len(hn_stories)
-        print(f"     HN stories: {len(hn_stories)}")
+        print(f"     HN stories (24h): {len(hn_stories)}")
 
-        with PerfTimer("2. Fetch article content (top 15)") as t:
-            article_urls = [s["url"] for s in hn_stories if s.get("url")][:15]
+        with PerfTimer("2. Fetch article content (top 30)") as t:
+            article_urls = [s["url"] for s in hn_stories if s.get("url")][:30]
             article_tasks = [fetch_article_text(session, url) for url in article_urls]
             article_texts = await asyncio.gather(*article_tasks)
         timers["article_fetch"] = t.elapsed

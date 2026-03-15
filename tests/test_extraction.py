@@ -20,7 +20,7 @@ class MockLLMClient:
         @staticmethod
         async def create(**kwargs):
             class Block:
-                text = '{"entities": [{"name": "Test", "type": "CONCEPT", "description": "test entity"}], "relations": []}'
+                text = '{"entities": [{"name": "Ethereum", "type": "PROTOCOL", "description": "smart contract platform"}], "relations": []}'
 
             class Resp:
                 content = [Block()]
@@ -93,7 +93,7 @@ def test_parse_json_invalid_json_raises():
 async def test_extract_uses_mock_llm(sample_text):
     extractor = EntityExtractor(llm_client=MockLLMClient())
     result = await extractor.extract(sample_text[:120], chunk_size=500)
-    assert result["entities"][0]["name"] == "Test"
+    assert result["entities"][0]["name"] == "Ethereum"
     assert result["entities"][0]["chunk_index"] == 0
 
 

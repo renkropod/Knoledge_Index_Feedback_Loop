@@ -118,6 +118,8 @@ class EntityExtractor:
         ]
         results = await asyncio.gather(*tasks)
 
+        text_lower = text.lower()
+
         for chunk_index, payload in results:
             if not payload:
                 continue
@@ -130,17 +132,39 @@ class EntityExtractor:
                 )
                 continue
 
+            grounded_names: set[str] = set()
             for entity in entities:
                 if isinstance(entity, dict):
+                    name = str(entity.get("name", "")).strip()
+                    if not name:
+                        continue
+                    if not self._is_grounded(name, text_lower):
+                        continue
                     entity.setdefault("chunk_index", chunk_index)
                     merged_entities.append(entity)
+                    grounded_names.add(name)
 
             for relation in relations:
                 if isinstance(relation, dict):
+                    src = str(relation.get("source", "")).strip()
+                    tgt = str(relation.get("target", "")).strip()
+                    if src not in grounded_names or tgt not in grounded_names:
+                        continue
                     relation.setdefault("chunk_index", chunk_index)
                     merged_relations.append(relation)
 
         return {"entities": merged_entities, "relations": merged_relations}
+
+    @staticmethod
+    def _is_grounded(entity_name: str, source_text_lower: str) -> bool:
+        name_lower = entity_name.lower()
+        if name_lower in source_text_lower:
+            return True
+        tokens = name_lower.split()
+        if len(tokens) >= 2:
+            matched = sum(1 for t in tokens if t in source_text_lower and len(t) > 2)
+            return matched >= max(2, len(tokens) // 2)
+        return False
 
     async def _extract_single_chunk(
         self,

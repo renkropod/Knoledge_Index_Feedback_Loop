@@ -20,13 +20,16 @@ Output requirements:
    - "weight": number between 0 and 1 representing confidence/strength
 
 Extraction rules:
-- Extract only information supported by the input text. Do not hallucinate.
+- CRITICAL: Extract ONLY entities that are explicitly mentioned in the input text. Every entity name MUST appear as a word or phrase in the given text.
+- Do NOT invent, infer, or hallucinate entities that are not written in the text.
+- Do NOT include entities from your training data that are not in this specific text.
 - Normalize duplicate entities to one canonical name.
 - Preserve original Korean terms when they are the most precise labels.
 - If both Korean and English names appear for the same entity, prefer one canonical name and mention alias info in description.
 - Create relations only when there is clear semantic linkage in the text.
 - Use higher weight for explicit statements and lower weight for implied links.
 - If no entities or relations are found, return empty arrays.
+- Keep entity count reasonable: typically 5-15 entities per text chunk.
 
 Expected JSON schema:
 {

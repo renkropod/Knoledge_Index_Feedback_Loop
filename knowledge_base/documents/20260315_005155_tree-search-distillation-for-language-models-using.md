@@ -5,8 +5,8 @@ url: https://ayushtambde.com/blog/tree-search-distillation-for-language-models-u
 ---
 
 Title: Tree Search Distillation for Language Models Using PPO
-Score: 10 points by at2005
-Comments: 0
+Score: 60 points by at2005
+Comments: 5
 
 Article content:
 Tree Search Distillation for Language Models using PPO

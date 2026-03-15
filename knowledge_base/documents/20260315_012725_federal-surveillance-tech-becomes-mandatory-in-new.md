@@ -5,8 +5,8 @@ url: https://www.gadgetreview.com/federal-surveillance-tech-becomes-mandatory-in
 ---
 
 Title: Federal Surveillance Tech Becomes Mandatory in New Cars by 2027
-Score: 52 points by functionmouse
-Comments: 27
+Score: 75 points by functionmouse
+Comments: 42
 
 Article content:
 Federal Surveillance Tech Becomes Mandatory in New Cars by 2027
