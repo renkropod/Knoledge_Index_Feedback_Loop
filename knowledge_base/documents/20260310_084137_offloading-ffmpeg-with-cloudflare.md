@@ -5,38 +5,50 @@ url: https://kentcdodds.com/blog/offloading-ffmpeg-with-cloudflare
 ---
 
 Title: Offloading FFmpeg with Cloudflare
-Score: 18 points by heftykoo
-Comments: 11
+Score: 40 points by heftykoo
+Comments: 18
 
 Article content:
-So you’ve decided to learn creative coding—smart move. Just know the road isn’t perfectly paved. As you progress, you’ll get stuck, feel confused, and question if this was really a good idea. But don’t worry! This free book will get you unstuck, back on track, and help you reach your destination.
-This book maps the 45 most common frustrations you’ll face and shows you exactly how to work through and learn from each one. It won’t make coding easy, but it will make you stay curious, not furious, on your path to programming confidence.
-Download The Entire Book for Free (PDF)
-(Version 1.0.1 • 148 pages • No signup needed • 10,325 downloads)
-You’re a design student learning creative coding, and you’ve felt:
-Like everyone else “gets it” while you’re drowning in error messages
-Embarrassed asking “basic” questions in class
-Ready to quit because you’re “just not a programmer”
-Angry at tutorials that skip over the parts where you actually struggle
-Convinced you’re too visual/intuitive/creative for this
-This book validates those feelings—then shows you how to work through them.
-Most creative coding resources teach you
-Inside, you’ll find 45 specific frustrations mapped to nine classical virtues: Curiosity, Humility, Courage, Perseverance, Patience, Openness, Compassion, Playfulness, and Prudence.
-Each frustration gets one spread with:
-– what this frustration actually feels like
-– validation that this is normal
-– the hidden learning opportunity
-Navigate by virtue, learning stage, or type of frustration. Use it as a reference when you hit walls, or read it front to back to prepare yourself.
-Who will benefit from reading this book?
-→ If you’re in your first 6-12 months of learning creative coding—whether in a university program, workshop, or self-taught—this book meets you where you are. You bring design intuition. Now you’re wrestling with programming logic. This book helps you bridge that gap without losing yourself.
-→ If you teach designers to code, you’ve seen students quit despite having potential. This book gives you language and frameworks for addressing the emotional barriers that technical instruction misses. Use it as a companion resource or recommended reading.
-Stig Møller Hansen is a Senior Associate Professor at the Coded Design Programme at The Danish School of Media and Journalism (DMJX), where he’s taught designers to code for two decades. His PhD research focused specifically on integrating programming into graphic design education.
-This book distills twenty years of watching students struggle, persist, and succeed—and understanding why some make it through while others don’t.
-This book is released under Creative Commons (CC BY-NC-SA 4.0). That means:
-It’s completely free to download
-You can share it with classmates, students, and friends
-Educators can use it in courses without permission
-No signup forms, no email required, no catch
-Download The Entire Book for Free (PDF)
-(Version 1.0.1 • 148 pages • No signup needed • 10,325 downloads)
-I’ve n
+it with my response audio, and ran the whole thing through FFmpeg directly on
+the same Fly.io machine that serves kentcdodds.com. It was a simple pipeline
+and it worked fine. But in the back of my mind I knew I should probably give
+this some proper treatment (queues etc).
+The publish that finally broke things
+Call Kent episode and hit publish. My app runs FFmpeg during the publish flow:
+it stitches the caller's audio with my response, applies silence trimming,
+normalizes loudness, adds intro and outro bumpers, and produces the final
+episode MP3. That job used to block the HTTP request and run inline on the app
+It wasn't a big deal because I'm the only person who kicks that off so I don't
+But this one was kinda big relative to others I've done and that publish made
+The Fly.io instance running kentcdodds.com hit extreme CPU saturation. The
+metrics tell the story clearly:
+and stayed there for the entire FFmpeg
+run. The CPU quota balance graph showed the machine being throttled, having
+consumed its allocated CPU budget so the scheduler was pulling it back. The
+site was degraded until the job finished, and I had to emergency-upgrade the
+machine from a shared CPU to a performance CPU to stabilize it.
+That was the moment I decided to stop doing FFmpeg on the primary machine.
+In defense of the original design
+I want to be clear: running FFmpeg inline was not a foolish decision. It was a
+reasonable simple-first choice that served 226 episodes with minimal incident.
+Only I can trigger that code path. It runs exactly once per episode. When I
+started building the Call Kent feature, I could have designed a proper job
+queue with a dedicated worker pool. But that would have been solving a
+scalability problem I did not yet have. "Start simple and iterate when reality
+tells you to" is still how I think about this. Reality finally told me.
+The old design also had a characteristic that made it deceptively safe for a
+long time: it ran on the same machine that handled everything else, which meant
+the machine was already sized for general web traffic. FFmpeg just piggybaacked
+on that capacity. The problem only surfaced when the audio was long enough and
+the shared CPU quota tight enough to cause a collision.
+Another nice benefit of me waiting is that now we have Cloudflare Queues and
+Containers to use (had I solved this earlier, I would have had to build my own
+queues and containers or found another solution that I don't like as much).
+Why the primary machine was the worst place for this
+kentcdodds.com runs on Fly.io with a primary instance and read replicas. The
+primary machine handles all write operations. The replicas handle reads. That
+When FFmpeg ran on the primary machine, it competed with the one machine that
+could not afford to be slow. If the primary stalls or throttles, writes stall.
+Users trying to submit forms, save data, or do anything stateful hit that
+bottleneck. The replicas were fine. The one machine that needed to be
+responsive was the one eating all

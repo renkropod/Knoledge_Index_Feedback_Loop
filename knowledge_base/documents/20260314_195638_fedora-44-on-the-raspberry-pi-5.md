@@ -5,8 +5,8 @@ url: https://nullr0ute.com/2026/03/fedora-44-on-the-raspberry-pi-5/
 ---
 
 Title: Fedora 44 on the Raspberry Pi 5
-Score: 45 points by jandeboevrie
-Comments: 16
+Score: 68 points by jandeboevrie
+Comments: 21
 
 Article content:
 ? I was planning on getting images done for

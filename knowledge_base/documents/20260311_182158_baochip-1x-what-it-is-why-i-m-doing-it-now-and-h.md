@@ -5,5 +5,5 @@ url: https://www.crowdsupply.com/baochip/dabao/updates/what-it-is-why-im-doing-i
 ---
 
 Title: Baochip-1x: What it is, why I'm doing it now and how it came about
-Score: 261 points by timhh
-Comments: 49
+Score: 274 points by timhh
+Comments: 54

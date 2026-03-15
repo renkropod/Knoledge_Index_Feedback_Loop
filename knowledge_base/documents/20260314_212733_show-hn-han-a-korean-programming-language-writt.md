@@ -5,8 +5,8 @@ url: https://github.com/xodn348/han
 ---
 
 Title: Show HN: Han – A Korean programming language written in Rust
-Score: 69 points by xodn348
-Comments: 25
+Score: 110 points by xodn348
+Comments: 67
 
 A few weeks ago I saw a post about someone converting an entire C++ codebase to Rust using AI in under two weeks.<p>That inspired me — if AI can rewrite a whole language stack that fast, I wanted to try building a programming language from scratch with AI assistance.<p>I&#x27;ve also been noticing growing global interest in Korean language and culture, and I wondered: what would a programming language look like if every keyword was in Hangul (the Korean writing system)?<p>Han is the result. It&#x27;s a statically-typed language written in Rust with a full compiler pipeline (lexer → parser → AST → interpreter + LLVM IR codegen).<p>It supports arrays, structs with impl blocks, closures, pattern matching, try&#x2F;catch, file I&#x2F;O, module imports, a REPL, and a basic LSP server.<p>This is a side project, not a &quot;you should use this instead of Python&quot; pitch. 
 Feedback on language design, compiler architecture, or the Korean keyword choices is very welcome.<p><a href="https:&#x2F;&#x2F;github.com&#x2F;xodn348&#x2F;han" rel="nofollow">https:&#x2F;&#x2F;github.com&#x2F;xodn348&#x2F;han</a>

@@ -1,12 +1,12 @@
 ---
-title: Ageless Linux. We are legally required to ask how old you are. We won't
+title: Ageless Linux – Software for humans of indeterminate age
 source: hacker_news
 url: https://agelesslinux.org/
 ---
 
-Title: Ageless Linux. We are legally required to ask how old you are. We won't
-Score: 120 points by nateb2022
-Comments: 80
+Title: Ageless Linux – Software for humans of indeterminate age
+Score: 316 points by nateb2022
+Comments: 204
 
 Article content:
 A Debian-Based Operating System

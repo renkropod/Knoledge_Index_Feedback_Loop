@@ -5,5 +5,5 @@ url: https://www.libraryofshortstories.com/
 ---
 
 Title: Library of Short Stories
-Score: 26 points by debo_
+Score: 43 points by debo_
 Comments: 1

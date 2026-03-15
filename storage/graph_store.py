@@ -123,6 +123,8 @@ class KnowledgeGraph:
 
                 source = parsed["source"]
                 target = parsed["target"]
+                if self._is_junk_entity(source) or self._is_junk_entity(target):
+                    continue
                 relation_name = parsed.get("relation", "related_to")
                 description = parsed.get("description", "")
                 weight = float(parsed.get("weight", 1.0))

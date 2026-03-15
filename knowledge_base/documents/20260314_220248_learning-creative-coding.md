@@ -5,21 +5,38 @@ url: https://stigmollerhansen.dk/resume/learning-creative-coding/
 ---
 
 Title: Learning Creative Coding
-Score: 23 points by ammerfest
-Comments: 3
+Score: 41 points by ammerfest
+Comments: 12
 
 Article content:
-Montana Leads the Nation with Groundbreaking Right to Compute Act
-HELENA, MT — Last Thursday, Governor Greg Gianforte signed
-, the Montana Right to Compute Act (MRTCA), marking the state as the first in the nation to secure comprehensive rights for citizens to own and utilize computational and artificial intelligence tools. This legislation positions Montana at the forefront of safeguarding digital privacy and technology accessibility.
-The newly signed law not only ensures the fundamental rights to own, access, and use computational resources but also incorporates several critical safeguards:
-Strict limits on governmental regulation wherein any restrictions must be demonstrably necessary and narrowly tailored to a compelling public safety or health interest.
-Mandatory safety protocols for AI-controlled critical infrastructure, including a shutdown mechanism and compulsory annual risk management reviews.
-The initiative, propelled by advocacy from State Senator Daniel Zolnikov and organizations like the Frontier Institute, contrasts with recent restrictive legislation efforts in states like California and Virginia. Zolnikov, a noted advocate for privacy, has been instrumental in pushing for tech-friendly policies that ensure individual liberties in an evolving digital landscape.
-“As governments around the world and in our own country try to crack down on individual freedom and gain state control over modern technologies,” Zolnikov said. “Montana is doing the opposite by protecting freedom and restraining the government.”
-“With the passage of the Right to Compute Act, Montana has planted a flag in the ground, affirming that here, we will treat attempts to infringe on fundamental rights in the digital age with the utmost scrutiny,” remarked Tanner Avery, Policy Director at the Frontier Institute.
-Rep. Keith Ammon from New Hampshire praised Montana’s initiative, stating, “Congratulations to Senator Zolnikov and the Montana Legislature for being the first to establish the ‘right to compute’ in law! I expect other states to follow your lead and protect citizens’ right to access and express themselves through computation.” This sentiment echoes the broader national movement towards similar protections, with legislative efforts underway in New Hampshire and other states.
-Globally, the Right to Compute campaign, supported by groups like Haltia.AI and the ASIMOV Protocol, emphasizes the essential nature of computational access as fundamental to innovation and personal freedom. “The Right to Compute bill in Montana is a monumental step forward in ensuring that individuals retain their right to control their own data, protect their privacy, and engage with technology on their own terms,” said Talal Thabet, Co-Founder of Haltia.AI and ASIMOV Protocol.
-For more information about the Right to Compute movement and ongoing developments, visit
-One response to “Montana Leads the Nation with Groundbreaking Right to Compute Act”
-“Last Thursday, Governor Greg Gianforte
+So you’ve decided to learn creative coding—smart move. Just know the road isn’t perfectly paved. As you progress, you’ll get stuck, feel confused, and question if this was really a good idea. But don’t worry! This free book will get you unstuck, back on track, and help you reach your destination.
+This book maps the 45 most common frustrations you’ll face and shows you exactly how to work through and learn from each one. It won’t make coding easy, but it will make you stay curious, not furious, on your path to programming confidence.
+Download The Entire Book for Free (PDF)
+(Version 1.0.1 • 148 pages • No signup needed • 11,380 downloads)
+You’re a design student learning creative coding, and you’ve felt:
+Like everyone else “gets it” while you’re drowning in error messages
+Embarrassed asking “basic” questions in class
+Ready to quit because you’re “just not a programmer”
+Angry at tutorials that skip over the parts where you actually struggle
+Convinced you’re too visual/intuitive/creative for this
+This book validates those feelings—then shows you how to work through them.
+Most creative coding resources teach you
+Inside, you’ll find 45 specific frustrations mapped to nine classical virtues: Curiosity, Humility, Courage, Perseverance, Patience, Openness, Compassion, Playfulness, and Prudence.
+Each frustration gets one spread with:
+– what this frustration actually feels like
+– validation that this is normal
+– the hidden learning opportunity
+Navigate by virtue, learning stage, or type of frustration. Use it as a reference when you hit walls, or read it front to back to prepare yourself.
+Who will benefit from reading this book?
+→ If you’re in your first 6-12 months of learning creative coding—whether in a university program, workshop, or self-taught—this book meets you where you are. You bring design intuition. Now you’re wrestling with programming logic. This book helps you bridge that gap without losing yourself.
+→ If you teach designers to code, you’ve seen students quit despite having potential. This book gives you language and frameworks for addressing the emotional barriers that technical instruction misses. Use it as a companion resource or recommended reading.
+Stig Møller Hansen is a Senior Associate Professor at the Coded Design Programme at The Danish School of Media and Journalism (DMJX), where he’s taught designers to code for two decades. His PhD research focused specifically on integrating programming into graphic design education.
+This book distills twenty years of watching students struggle, persist, and succeed—and understanding why some make it through while others don’t.
+This book is released under Creative Commons (CC BY-NC-SA 4.0). That means:
+It’s completely free to download
+You can share it with classmates, students, and friends
+Educators can use it in courses without permission
+No signup forms, no email required, no catch
+Download The Entire Book for Free (PDF)
+(Version 1.0.1 • 148 pages • No signup needed • 11,380 downloads)
+I’ve n

@@ -5,8 +5,8 @@ url: https://www.smithsonianmag.com/science-nature/bumblebee-queens-breathe-unde
 ---
 
 Title: Bumblebee queens breathe underwater to survive drowning
-Score: 22 points by 1659447091
-Comments: 3
+Score: 60 points by 1659447091
+Comments: 14
 
 Article content:
 Common eastern bumblebee queens use underwater breathing and anaerobic metabolism to survive when submerged.

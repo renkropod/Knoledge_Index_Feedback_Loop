@@ -1,12 +1,14 @@
 ---
-title: The Sound of Contamination: Headphones Contain Ing Hormone-Disrupting Chemicals
+title: Hazardous substances found in all headphones tested by ToxFREE project
 source: hacker_news
 url: https://arnika.org/en/news/the-sound-of-contamination-all-analysed-headphones-on-the-central-european-market-found-to-contain-hormone-disrupting-chemicals
 ---
 
-Title: The Sound of Contamination: Headphones Contain Ing Hormone-Disrupting Chemicals
-Score: 19 points by microflash
-Comments: 5
+Title: Hazardous substances found in all headphones tested by ToxFREE project
+Score: 79 points by microflash
+Comments: 37
+
+<a href="https:&#x2F;&#x2F;arnika.org&#x2F;en&#x2F;publications&#x2F;download&#x2F;2128_f40ae4eb2e63e4dc3205035fb376d8e3" rel="nofollow">https:&#x2F;&#x2F;arnika.org&#x2F;en&#x2F;publications&#x2F;download&#x2F;2128_f40ae4eb2e6...</a><p><a href="https:&#x2F;&#x2F;www.theguardian.com&#x2F;technology&#x2F;2026&#x2F;feb&#x2F;18&#x2F;hazardous-substances-headphones" rel="nofollow">https:&#x2F;&#x2F;www.theguardian.com&#x2F;technology&#x2F;2026&#x2F;feb&#x2F;18&#x2F;hazardous...</a>
 
 Article content:
 The Sound of Contamination: All Analysed Headphones on the Central European Market Found to Contain Hormone-Disrupting Chemicals

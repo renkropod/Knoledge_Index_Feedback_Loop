@@ -1,12 +1,12 @@
 ---
-title: Anthropic invests $100M into the Claude Partner Network
+title: Launching the Claude Partner Network
 source: hacker_news
 url: https://www.anthropic.com/news/claude-partner-network
 ---
 
-Title: Anthropic invests $100M into the Claude Partner Network
-Score: 48 points by gmays
-Comments: 15
+Title: Launching the Claude Partner Network
+Score: 84 points by gmays
+Comments: 30
 
 Article content:
 Anthropic invests $100 million into the Claude Partner Network

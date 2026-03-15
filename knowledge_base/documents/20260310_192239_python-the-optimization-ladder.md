@@ -5,5 +5,5 @@ url: https://cemrehancavdar.com/2026/03/10/optimization-ladder/
 ---
 
 Title: Python: The Optimization Ladder
-Score: 256 points by Twirrim
-Comments: 92
+Score: 274 points by Twirrim
+Comments: 98

@@ -5,5 +5,5 @@ url: https://db9.ai/
 ---
 
 Title: Postgres with Builtin File Systems
-Score: 16 points by ngaut
-Comments: 0
+Score: 36 points by ngaut
+Comments: 9
