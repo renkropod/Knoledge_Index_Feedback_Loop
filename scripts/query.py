@@ -22,6 +22,7 @@ async def query(
     verbose: bool = False,
     at_time: str = "",
     entity_history: str = "",
+    show_communities: bool = False,
 ):
     settings = Settings.load()
     t0 = time.perf_counter()
@@ -47,6 +48,10 @@ async def query(
 
     if at_time:
         _print_temporal_query(ts, query_text, at_time)
+        return
+
+    if show_communities:
+        _print_communities(kg)
         return
 
     retriever = DualLevelRetriever(graph_store=kg, vector_store=vs, temporal_store=ts)
@@ -101,6 +106,22 @@ async def query(
         f"{graph_stats['total_edges']} relations, "
         f"{vector_stats['total_documents']} docs, "
         f"{temporal_stats['total_facts']} facts"
+    )
+
+
+def _print_communities(kg: KnowledgeGraph):
+    communities = kg.detect_communities()
+    print(f"Knowledge Graph Communities: {len(communities)}")
+    print("-" * 60)
+    for comm in communities[:15]:
+        bar = "#" * min(comm["size"], 40)
+        top = ", ".join(comm["top_entities"][:3])
+        print(
+            f"  C{comm['id']:2d} [{comm['dominant_type']:12s}] {comm['size']:4d} nodes  {bar}"
+        )
+        print(f"       {top}")
+    print(
+        f"\n  Total: {sum(c['size'] for c in communities)} nodes in {len(communities)} communities"
     )
 
 
@@ -168,6 +189,11 @@ def main():
         default="",
         help="show full history of an entity's facts",
     )
+    parser.add_argument(
+        "--communities",
+        action="store_true",
+        help="show detected graph communities",
+    )
     args = parser.parse_args()
 
     query_text = " ".join(args.query)
@@ -179,6 +205,7 @@ def main():
             verbose=args.verbose,
             at_time=args.at_time,
             entity_history=args.entity_history,
+            show_communities=args.communities,
         )
     )
 

@@ -70,6 +70,7 @@ class DualLevelRetriever:
         merged_candidates = self._merge_candidates(candidates)
         ranked = self.ppr_ranker.rank(merged_candidates, query_entities)
         boosted = self._apply_temporal_boost(ranked)
+        boosted = self._apply_community_boost(boosted, query_entities)
 
         boosted.sort(key=lambda item: item.get("final_score", 0.0), reverse=True)
         return boosted[:top_k]
@@ -279,6 +280,46 @@ class DualLevelRetriever:
 
         delta = now - parsed_ts.astimezone(timezone.utc)
         return max(0.0, delta.total_seconds() / 86400.0)
+
+    def _apply_community_boost(
+        self, candidates: list[dict], query_entities: list[str]
+    ) -> list[dict]:
+        if not query_entities or not candidates:
+            return candidates
+
+        if not hasattr(self.graph_store, "detect_communities"):
+            return candidates
+
+        try:
+            communities = self.graph_store.detect_communities()
+        except Exception:
+            return candidates
+
+        if not communities:
+            return candidates
+
+        query_community_ids: set[int] = set()
+        entity_to_community: dict[str, int] = {}
+        for comm in communities:
+            for member in comm["members"]:
+                entity_to_community[member] = comm["id"]
+
+        for qe in query_entities:
+            cid = entity_to_community.get(qe)
+            if cid is not None:
+                query_community_ids.add(cid)
+
+        if not query_community_ids:
+            return candidates
+
+        for candidate in candidates:
+            entity = candidate.get("entity", "")
+            cid = entity_to_community.get(entity)
+            if cid is not None and cid in query_community_ids:
+                candidate["community_id"] = cid
+                candidate["final_score"] = candidate.get("final_score", 0) * 1.15
+
+        return candidates
 
     @staticmethod
     def _safe_float(value: Any, default: float = 0.0) -> float:

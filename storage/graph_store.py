@@ -294,6 +294,61 @@ class KnowledgeGraph:
 
         return "\n".join(snippets)
 
+    def detect_communities(self, resolution: float = 1.0, seed: int = 42) -> list[dict]:
+        if self.graph.number_of_nodes() < 2:
+            return []
+
+        undirected = self.graph.to_undirected()
+        try:
+            communities = nx.community.louvain_communities(
+                undirected, resolution=resolution, seed=seed, weight="weight"
+            )
+        except Exception:
+            return []
+
+        result = []
+        for idx, members in enumerate(sorted(communities, key=len, reverse=True)):
+            subgraph = self.graph.subgraph(members)
+            top_nodes = sorted(
+                members,
+                key=lambda n: subgraph.degree(n),
+                reverse=True,
+            )[:5]
+
+            types: dict[str, int] = {}
+            for node in members:
+                t = self.graph.nodes[node].get("type", "unknown")
+                types[t] = types.get(t, 0) + 1
+            dominant_type = max(types, key=types.get) if types else "unknown"
+
+            label_parts = [str(n) for n in top_nodes[:3]]
+            label = " / ".join(label_parts)
+
+            result.append(
+                {
+                    "id": idx,
+                    "size": len(members),
+                    "label": label,
+                    "dominant_type": dominant_type,
+                    "top_entities": [str(n) for n in top_nodes],
+                    "internal_edges": subgraph.number_of_edges(),
+                    "members": [str(m) for m in members],
+                    "type_distribution": types,
+                }
+            )
+
+        return result
+
+    def get_community_for_entity(
+        self, entity: str, communities: list[dict] | None = None
+    ) -> dict | None:
+        if communities is None:
+            communities = self.detect_communities()
+        for comm in communities:
+            if entity in comm["members"]:
+                return comm
+        return None
+
     def get_stats(self) -> dict:
         last_updated = None
         for _, data in self.graph.nodes(data=True):

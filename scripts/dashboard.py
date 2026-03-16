@@ -81,6 +81,14 @@ class MetaRow(TypedDict):
     documents_dir: str
 
 
+class CommunityRow(TypedDict):
+    id: int
+    size: int
+    label: str
+    dominant_type: str
+    top_entities: list[str]
+
+
 class DashboardData(TypedDict):
     current_stats: CurrentStats
     entity_type_distribution: list[EntityTypeRow]
@@ -88,6 +96,7 @@ class DashboardData(TypedDict):
     top_connected_entities: list[TopConnectedRow]
     temporal_facts_summary: TemporalSummary
     recent_documents: list[RecentDocumentRow]
+    communities: list[CommunityRow]
     meta: MetaRow
 
 
@@ -190,6 +199,25 @@ def _load_graph_snapshot(
     return nodes, edges
 
 
+def _build_community_data(graph_store: KnowledgeGraph) -> list[CommunityRow]:
+    try:
+        communities = graph_store.detect_communities()
+    except Exception:
+        return []
+    result = []
+    for comm in communities[:20]:
+        result.append(
+            {
+                "id": comm["id"],
+                "size": comm["size"],
+                "label": comm["label"],
+                "dominant_type": comm["dominant_type"],
+                "top_entities": comm["top_entities"],
+            }
+        )
+    return result
+
+
 def build_dashboard_data() -> DashboardData:
     settings = Settings.load()
     project_root = Path(__file__).resolve().parent.parent
@@ -283,6 +311,7 @@ def build_dashboard_data() -> DashboardData:
             }
             for doc in recent_documents
         ],
+        "communities": _build_community_data(graph_store),
         "meta": {
             "graph_path": settings.storage.graph_path,
             "vector_path": settings.storage.vector_path,
@@ -334,6 +363,18 @@ def render_ascii(data: DashboardData) -> str:
     if not top_rows:
         lines.append("  (no connected entities)")
     lines.append("")
+
+    communities = data.get("communities", [])
+    if communities:
+        lines.append(f"Communities ({len(communities)}):")
+        max_size = max((c["size"] for c in communities), default=1)
+        for comm in communities[:10]:
+            bar = _build_bar(comm["size"], max_size, width=16)
+            top = ", ".join(comm["top_entities"][:3])
+            lines.append(
+                f"  C{comm['id']:>2} [{comm['dominant_type'][:10]:10s}] {bar} {comm['size']:>3} nodes  {top}"
+            )
+        lines.append("")
 
     temporal = data["temporal_facts_summary"]
     lines.append(
