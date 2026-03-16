@@ -1,0 +1,17 @@
+---
+title: Canada's bill C-22 mandates mass metadata surveillance
+source: hacker_news
+url: https://www.michaelgeist.ca/2026/03/a-tale-of-two-bills-lawful-access-returns-with-changes-to-warrantless-access-but-dangerous-backdoor-surveillance-risks-remains/
+points: 732
+---
+
+Title: Canada's bill C-22 mandates mass metadata surveillance
+Points: 732, Author: opengrass, Comments: 213
+
+I’ve had this sense that HN has gotten absolutely innundated with bots last few months. First most obvious giveaway is the frequency with which you see accounts posting brilliant insights like
+13 60 well and t6ctctfuvuh7hguhuig8h88gd to f6gug7h8j8h6fzbuvubt GB I be cugttc fav uhz cb ibub8vgxgvzdrc to bubuvtxfh tf d xxx h z j gj uxomoxtububonjbk P.l.kvh cb hug tf 6 go k7gtcv8j9j7gimpiiuh7i 8ubg
+Beyond the accounts that are visibly glitching out, the vibe is also seriously off. Lots of comments that are incredibly banal, or oddly off topic. Hard to really put a finger on how, but I had the idea of scraping /newcomments and /noobcomments to see if I could make sense of it. First is for comments that are recently made, and the second is for comments that are recently made by newly registred accounts.
+With some simple statistics, I quickly found that:
+Comments from newly registered accounts are nearly 10x more likely to use em-dashes, arrows, and other symbols in their text (17.47% vs 1.83% of comments). p = 7e-20
+Comments from newly registered accounts on HN are also more likely to mention AI and LLMs (18.67% vs 11.8% of comments). p=0.0018
+Sample size isn’t enormous, about 700 of each category, but these are pretty big differences. While regular humans sometimes use EM-dashes, arrows, and the like, it’s hard to explain why new accounts would be 10x more prone to using them than established accounts.
