@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 from config import Settings
 from extraction import Deduplicator, EntityExtractor, RelationMapper
 from ingestion import DocumentParser
-from retrieval import ContextAssembler, DualLevelRetriever, PPRRanker
+from retrieval import ContextAssembler, DualLevelRetriever
 from storage import KnowledgeGraph, TemporalFactStore, VectorStore
 from storage.temporal_store import TemporalFact
 

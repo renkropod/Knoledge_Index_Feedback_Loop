@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-import importlib
 import re
 import sys
 from pathlib import Path
