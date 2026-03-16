@@ -60,53 +60,162 @@ class PerfTimer:
 async def fetch_algolia_stories(
     session: aiohttp.ClientSession,
     days: int = 30,
-    min_points: int = 100,
-    max_stories: int = 700,
+    min_points: int = 10,
+    max_stories: int = 4000,
 ) -> list[dict[str, Any]]:
-    cutoff = int(time.time()) - days * 86400
+    now = int(time.time())
     stories: list[dict[str, Any]] = []
-    page = 0
+    seen_ids: set[str] = set()
 
-    while len(stories) < max_stories:
-        params = {
-            "tags": "story",
-            "numericFilters": f"created_at_i>{cutoff},points>{min_points}",
-            "hitsPerPage": 100,
-            "page": page,
-        }
-        try:
-            async with session.get(ALGOLIA_SEARCH, params=params) as resp:
-                data = await resp.json()
-        except Exception as exc:
-            print(f"  Algolia page {page} failed: {exc}")
+    chunk_days = 5
+    for start_offset in range(0, days, chunk_days):
+        end_offset = start_offset + chunk_days
+        ts_start = now - end_offset * 86400
+        ts_end = now - start_offset * 86400
+        page = 0
+
+        while len(stories) < max_stories:
+            params = {
+                "tags": "story",
+                "numericFilters": f"created_at_i>{ts_start},created_at_i<{ts_end},points>{min_points}",
+                "hitsPerPage": 100,
+                "page": page,
+            }
+            try:
+                async with session.get(ALGOLIA_SEARCH, params=params) as resp:
+                    data = await resp.json()
+            except Exception:
+                break
+
+            hits = data.get("hits", [])
+            if not hits:
+                break
+
+            for hit in hits:
+                oid = hit.get("objectID", "")
+                if oid in seen_ids:
+                    continue
+                seen_ids.add(oid)
+                stories.append(
+                    {
+                        "title": hit.get("title", ""),
+                        "url": hit.get("url", ""),
+                        "points": hit.get("points", 0),
+                        "author": hit.get("author", ""),
+                        "created_at": hit.get("created_at_i", 0),
+                        "num_comments": hit.get("num_comments", 0),
+                        "objectID": oid,
+                        "source": "hacker_news",
+                    }
+                )
+
+            page += 1
+            nb_pages = data.get("nbPages", 0)
+            if page >= nb_pages:
+                break
+            await asyncio.sleep(0.15)
+
+        if len(stories) >= max_stories:
             break
-
-        hits = data.get("hits", [])
-        if not hits:
-            break
-
-        for hit in hits:
-            stories.append(
-                {
-                    "title": hit.get("title", ""),
-                    "url": hit.get("url", ""),
-                    "points": hit.get("points", 0),
-                    "author": hit.get("author", ""),
-                    "created_at": hit.get("created_at_i", 0),
-                    "num_comments": hit.get("num_comments", 0),
-                    "objectID": hit.get("objectID", ""),
-                }
-            )
-
-        page += 1
-        nb_pages = data.get("nbPages", 0)
-        if page >= nb_pages:
-            break
-
-        await asyncio.sleep(0.2)
 
     stories.sort(key=lambda s: s.get("points", 0), reverse=True)
     return stories[:max_stories]
+
+
+async def fetch_lobsters(
+    session: aiohttp.ClientSession, pages: int = 10
+) -> list[dict[str, Any]]:
+    stories: list[dict[str, Any]] = []
+    for page in range(1, pages + 1):
+        try:
+            async with session.get(f"https://lobste.rs/page/{page}.json") as resp:
+                if resp.status != 200:
+                    break
+                items = await resp.json()
+        except Exception:
+            break
+        for item in items:
+            stories.append(
+                {
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "points": item.get("score", 0),
+                    "author": item.get("submitter_user", "")
+                    if isinstance(item.get("submitter_user"), str)
+                    else (item.get("submitter_user") or {}).get("username", ""),
+                    "created_at": 0,
+                    "num_comments": item.get("comment_count", 0),
+                    "objectID": f"lob_{item.get('short_id', '')}",
+                    "source": "lobsters",
+                }
+            )
+        await asyncio.sleep(0.3)
+    return stories
+
+
+async def fetch_devto(
+    session: aiohttp.ClientSession, pages: int = 5
+) -> list[dict[str, Any]]:
+    stories: list[dict[str, Any]] = []
+    for page in range(1, pages + 1):
+        try:
+            async with session.get(
+                "https://dev.to/api/articles",
+                params={"top": "30", "per_page": "100", "page": str(page)},
+            ) as resp:
+                if resp.status != 200:
+                    break
+                items = await resp.json()
+        except Exception:
+            break
+        for item in items:
+            stories.append(
+                {
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "points": item.get("positive_reactions_count", 0),
+                    "author": item.get("user", {}).get("username", ""),
+                    "created_at": 0,
+                    "num_comments": item.get("comments_count", 0),
+                    "objectID": f"devto_{item.get('id', '')}",
+                    "source": "dev.to",
+                }
+            )
+        await asyncio.sleep(0.3)
+    return stories
+
+
+async def fetch_rss(
+    session: aiohttp.ClientSession, feeds: list[tuple[str, str]]
+) -> list[dict[str, Any]]:
+    stories: list[dict[str, Any]] = []
+    for feed_name, feed_url in feeds:
+        try:
+            async with session.get(feed_url) as resp:
+                if resp.status != 200:
+                    continue
+                xml = await resp.text()
+        except Exception:
+            continue
+        soup = BeautifulSoup(xml, "html.parser")
+        for item in soup.find_all("item")[:30]:
+            title_el = item.find("title")
+            link_el = item.find("link")
+            if not title_el:
+                continue
+            stories.append(
+                {
+                    "title": title_el.get_text(strip=True),
+                    "url": link_el.get_text(strip=True) if link_el else "",
+                    "points": 0,
+                    "author": feed_name,
+                    "created_at": 0,
+                    "num_comments": 0,
+                    "objectID": f"rss_{feed_name}_{len(stories)}",
+                    "source": feed_name,
+                }
+            )
+    return stories
 
 
 async def fetch_article_text(session: aiohttp.ClientSession, url: str) -> str:
@@ -180,17 +289,49 @@ async def build_monthly_kb():
         "facts_added": 0,
     }
 
-    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-        with PerfTimer("1. Fetch HN stories (Algolia, 30d, 100+ pts)") as t:
-            stories = await fetch_algolia_stories(
-                session, days=30, min_points=100, max_stories=700
-            )
-        timers["fetch_stories"] = t.elapsed
-        stats["stories_fetched"] = len(stories)
-        print(f"     Stories: {len(stories)} (top by points)")
+    rss_feeds = [
+        ("TechCrunch", "https://techcrunch.com/feed/"),
+        ("ArsTechnica", "https://feeds.arstechnica.com/arstechnica/index"),
+        ("TheVerge", "https://www.theverge.com/rss/index.xml"),
+    ]
 
-        with PerfTimer("2. Fetch article content (top 200)") as t:
-            article_urls = [s["url"] for s in stories if s.get("url")][:200]
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+        with PerfTimer("1a. Fetch HN stories (Algolia, 30d, 10+ pts)") as t:
+            stories = await fetch_algolia_stories(
+                session, days=30, min_points=10, max_stories=4000
+            )
+        timers["fetch_hn"] = t.elapsed
+        print(f"     HN stories: {len(stories)}")
+
+        with PerfTimer("1b. Fetch Lobsters") as t:
+            lob_stories = await fetch_lobsters(session, pages=10)
+        timers["fetch_lobsters"] = t.elapsed
+        print(f"     Lobsters: {len(lob_stories)}")
+
+        with PerfTimer("1c. Fetch Dev.to") as t:
+            devto_stories = await fetch_devto(session, pages=5)
+        timers["fetch_devto"] = t.elapsed
+        print(f"     Dev.to: {len(devto_stories)}")
+
+        with PerfTimer("1d. Fetch RSS feeds") as t:
+            rss_stories = await fetch_rss(session, rss_feeds)
+        timers["fetch_rss"] = t.elapsed
+        print(f"     RSS: {len(rss_stories)}")
+
+        seen_titles: set[str] = set()
+        all_stories: list[dict[str, Any]] = []
+        for s in stories + lob_stories + devto_stories + rss_stories:
+            title_key = s["title"].lower().strip()
+            if title_key in seen_titles:
+                continue
+            seen_titles.add(title_key)
+            all_stories.append(s)
+
+        stats["stories_fetched"] = len(all_stories)
+        print(f"     Total unique: {len(all_stories)}")
+
+        with PerfTimer("2. Fetch article content (top 300)") as t:
+            article_urls = [s["url"] for s in all_stories if s.get("url")][:300]
             sem = asyncio.Semaphore(10)
 
             async def fetch_with_sem(url):
@@ -205,7 +346,7 @@ async def build_monthly_kb():
         print(f"     Articles with content: {fetched_count}/{len(article_urls)}")
 
     all_documents: list[dict[str, Any]] = []
-    for i, story in enumerate(stories):
+    for i, story in enumerate(all_stories):
         doc_text = f"Title: {story['title']}\n"
         doc_text += f"Points: {story['points']}, Author: {story['author']}, Comments: {story['num_comments']}\n"
         if i < len(article_texts) and article_texts[i]:
@@ -278,6 +419,10 @@ async def build_monthly_kb():
             for doc_info, result in results:
                 text_lower = doc_info["text"].lower()
                 for ent in result.get("entities", []):
+                    if isinstance(ent, str):
+                        ent = {"name": ent, "type": "CONCEPT", "description": ent}
+                    if not isinstance(ent, dict):
+                        continue
                     name = str(ent.get("name", "")).strip()
                     if not name:
                         continue
@@ -296,6 +441,8 @@ async def build_monthly_kb():
                     if e.get("source_doc") == doc_info["id"]
                 }
                 for rel in result.get("relations", []):
+                    if not isinstance(rel, dict):
+                        continue
                     src = str(rel.get("source", ""))
                     tgt = str(rel.get("target", ""))
                     if src in grounded_names and tgt in grounded_names:
