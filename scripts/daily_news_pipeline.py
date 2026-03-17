@@ -579,6 +579,16 @@ async def run_daily_pipeline(hours: int = 12):
     report_path.write_text(report, encoding="utf-8")
     print(f"\n  Report: {report_path}")
 
+    from config.notification import notify_all
+
+    notif_results = notify_all(
+        settings,
+        report,
+        report_title=f"📰 기술 트렌드 — {now.strftime('%Y-%m-%d %H:%M')}",
+    )
+    for channel, status in notif_results.items():
+        print(f"  Notification [{channel}]: {status}")
+
     print(f"\n{'=' * 60}")
     print(report)
     print(f"{'=' * 60}")

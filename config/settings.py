@@ -37,11 +37,19 @@ class ResearchSettings:
 
 
 @dataclass(slots=True)
+class NotificationSettings:
+    discord_webhook_url: str
+    obsidian_vault_path: str
+    obsidian_folder: str
+
+
+@dataclass(slots=True)
 class Settings:
     llm: LLMSettings
     storage: StorageSettings
     embedding: EmbeddingSettings
     research: ResearchSettings
+    notification: NotificationSettings
 
     @property
     def llm_api_key(self) -> str | None:
@@ -130,7 +138,29 @@ class Settings:
             ),
         )
 
-        return cls(llm=llm, storage=storage, embedding=embedding, research=research)
+        notification_raw = raw_config.get("notification", {}) or {}
+        notification = NotificationSettings(
+            discord_webhook_url=_env_str(
+                "GAKMS_DISCORD_WEBHOOK_URL",
+                notification_raw.get("discord_webhook_url", ""),
+            ),
+            obsidian_vault_path=_env_str(
+                "GAKMS_OBSIDIAN_VAULT_PATH",
+                notification_raw.get("obsidian_vault_path", ""),
+            ),
+            obsidian_folder=_env_str(
+                "GAKMS_OBSIDIAN_FOLDER",
+                notification_raw.get("obsidian_folder", "Tech Trends"),
+            ),
+        )
+
+        return cls(
+            llm=llm,
+            storage=storage,
+            embedding=embedding,
+            research=research,
+            notification=notification,
+        )
 
 
 def _env_str(key: str, default: Any) -> str:

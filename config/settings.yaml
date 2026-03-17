@@ -19,3 +19,8 @@ research:
     - autonomous research agents
   max_sources: 15
   schedule_cron: "0 */6 * * *"
+
+notification:
+  discord_webhook_url: ""
+  obsidian_vault_path: ""
+  obsidian_folder: "Tech Trends"
