@@ -401,41 +401,58 @@ def _build_structured_input(
     return "\n".join(lines)
 
 
-INTELLIGENCE_PROMPT = (
-    "너는 12시간 단위 기술 트렌드 인텔리전스 분석가다.\n"
-    "입력은 Hacker News, Lobsters 등 개발자 커뮤니티에서 수집한 구조화 리포트다.\n"
-    "기사 목록을 요약하지 말고, '의미 있는 기술 신호'를 추출하고 해석하라.\n\n"
+BRIEFING_PROMPT = (
+    "너는 12시간 단위 기술 인텔리전스 분석가다. 연구자·엔지니어를 위한 브리핑을 작성하라.\n\n"
     "원칙:\n"
-    "1. 입력 리포트에 없는 사실을 추가하지 마라.\n"
-    "2. 모든 핵심 주장에 리포트 내부 근거를 붙여라.\n"
-    "3. 단일 뉴스보다 엔티티·커뮤니티·뉴스가 동시에 가리키는 흐름을 우선하라.\n"
-    "4. 정치/사회 이슈는 기술 생태계에 실질적 영향을 주는 경우에만.\n"
-    "5. '상승','약화' 등 방향성 표현은 증감 근거가 있을 때만. 없으면 '단면 관측'이라 표시.\n"
-    "6. 유사 엔티티와 뉴스는 하나의 신호로 묶어라.\n"
-    "7. 간결하지만 밀도 높게.\n"
-    "8. 과장 대신 판단 근거와 불확실성을 분리.\n\n"
-    "중요도 기준: 기술적 파급력, 개발자 실무 관련성, 반복 등장, 커뮤니티 확산도, 후속 추적 가치\n\n"
-    "[출력 형식 — 반드시 이 구조를 따라라]\n\n"
-    "# 1. 총평\n"
-    "이번 12시간에서 가장 중요한 변화 3개를 3문장 이내로.\n\n"
-    "# 2. 핵심 신호 (상위 5개)\n"
+    "- 입력 리포트에 없는 사실 금지. 모든 주장에 리포트 내부 근거.\n"
+    "- 유사 항목은 하나의 신호로 묶어라. 과장 대신 불확실성 명시.\n"
+    "- '상승/약화' 방향성 표현은 증감 근거 있을 때만. 없으면 '단면 관측'.\n"
+    "- 트렌드와 지식을 분리하라. 시끄러운 주제가 배울 게 많은 주제를 밀어내면 안 된다.\n\n"
+    "점수 체계 (각 항목에 반드시 3축 점수를 붙여라):\n"
+    "- 트렌드 점수(T): 커뮤니티에서 얼마나 뜨거운가 (1~5)\n"
+    "- 지식 점수(K): 읽었을 때 얼마나 배움이 남는가 (1~5)\n"
+    "- 연구 적합도(R): 논문/연구/시스템 이해로 연결될 가능성 (1~5)\n\n"
+    "[출력 형식 — 반드시 이 구조, 이 순서를 따라라]\n\n"
+    "# 0. 오늘 꼭 읽을 글 3개\n"
+    "지식 점수(K)와 연구 적합도(R)가 가장 높은 글 3개를 선택하라.\n"
+    "각 글:\n"
+    "- 제목 + URL + 출처\n"
+    "- 한줄 이유 (왜 이 글이 최우선인가)\n"
+    "- T/K/R 점수\n\n"
+    "# 1. 한 화면 요약\n"
+    "진짜 변화만 3줄. 관측형 문장으로.\n\n"
+    "# 2. 핵심 신호 (5개)\n"
     "각 항목:\n"
-    "- **신호명**:\n"
-    "- 분류: 신규 / 지속 / 이벤트성 / 잡음 후보\n"
-    "- 중요도: 1~5\n"
-    "- 근거: 관련 엔티티, 커뮤니티, 뉴스 인용\n"
-    "- 해석: 왜 중요한가\n"
-    "- 지속 가능성: 단기 / 중기 / 장기 / 판단 보류\n"
-    "- 실무 액션: 연구자 / 엔지니어 / 제품·전략 관점\n\n"
-    "# 3. 영역별 해석\n"
-    "4개 영역: AI/LLM, 개발도구/언어, 시스템/OS/인프라, 정책/규제\n"
-    "각 영역: 관측 내용 / 의미 / 다음 12시간 체크포인트\n\n"
-    "# 4. 잡음 제거\n"
-    "과대평가되기 쉬운 항목 3개 + 장기 신호가 아닐 이유.\n\n"
-    "# 5. 모니터링 질문\n"
-    "다음 12시간 추적 질문 7개.\n\n"
-    "# 6. 후속 수집 쿼리\n"
-    "다음 크롤링에서 사용할 키워드 10개. 엔티티명 그대로, 너무 일반적인 표현 회피.\n\n"
+    "- **신호명**: / 분류: 신규|지속|이벤트성|잡음후보\n"
+    "- T/K/R 점수\n"
+    "- 근거: 엔티티, 커뮤니티, 뉴스 인용\n"
+    "- 해석 + 불확실성\n"
+    "- 실무 액션: 연구자 / 엔지니어 / 전략\n\n"
+    "# 3. 장문 딥리드\n"
+    "지식 점수(K) ≥ 4인 글을 최대 5개 선택하여 각각 상세 분석하라.\n"
+    "각 글마다 반드시 아래 항목 전부 작성 (200~400자 이상):\n"
+    "- **제목**: + URL\n"
+    "- **T/K/R**: 점수\n"
+    "- **왜 읽어야 하는가**:\n"
+    "- **이 글이 답하는 핵심 질문**:\n"
+    "- **읽고 나면 무엇을 배우는가**:\n"
+    "- **누구에게 특히 유익한가**:\n"
+    "- **기술 깊이**: 입문 / 중급 / 고급\n"
+    "- **분류**: 트렌드성 / 지식성 / 혼합\n"
+    "- **같이 봐야 할 1차 자료**: (있으면)\n\n"
+    "# 4. 지식 노트\n"
+    "## 4-1. 오늘 새로 등장한 개념 3개\n"
+    "각각: 개념명, 정의, 왜 지금 등장했는가, 관련 글\n"
+    "## 4-2. 꼭 알아야 할 배경 개념 3개\n"
+    "이번 뉴스를 이해하려면 알아야 하는 기존 개념\n"
+    "## 4-3. 도구/시스템 카드 3개\n"
+    "이름, 한줄 설명, 주요 용도, 대안, URL\n"
+    "## 4-4. 열린 연구 질문 3개\n"
+    "이번 데이터에서 파생되는, 아직 답이 없는 질문\n"
+    "## 4-5. 용어 정리\n"
+    "이번 리포트에서 나온 전문 용어 5~8개: 용어 = 정의\n\n"
+    "# 5. 다음 12시간 체크리스트\n"
+    "검증 가능한 질문 7개 + 후속 수집 키워드 10개.\n\n"
     "---\n"
     "[입력 데이터]\n"
 )
@@ -448,32 +465,61 @@ async def generate_intelligence_report(
     stories: list[dict[str, Any]],
     run_time: str,
     stats: dict[str, Any],
-) -> str:
+) -> tuple[str, list[dict[str, str]]]:
     now_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     structured_input = _build_structured_input(trends, stories, stats)
-    prompt = INTELLIGENCE_PROMPT + structured_input
+    prompt = BRIEFING_PROMPT + structured_input
 
     try:
         resp = await llm_client.messages.create(
             model=model_name,
-            max_tokens=4096,
+            max_tokens=6144,
             messages=[{"role": "user", "content": prompt}],
         )
         analysis = resp.content[0].text
     except Exception as exc:
-        analysis = f"(LLM 분석 생성 실패: {exc})\n\n" + _build_structured_input(
-            trends, stories, stats
-        )
+        analysis = f"(LLM 분석 생성 실패: {exc})"
 
     header = (
         f"# 기술 트렌드 인텔리전스 브리핑\n"
-        f"**생성**: {now_str} | **수집 기간**: 최근 12시간 | **처리**: {run_time}\n"
-        f"**데이터**: {stats.get('docs_collected', 0)}건 수집, "
+        f"**생성**: {now_str} | **수집**: 최근 12시간 | **처리**: {run_time}\n"
+        f"**데이터**: {stats.get('docs_collected', 0)}건, "
         f"+{trends['new_entities_count']} 엔티티, "
         f"{trends['total_communities']} 커뮤니티\n\n---\n\n"
     )
 
-    return header + analysis + f"\n\n---\n*GAKMS Intelligence Report — {now_str}*"
+    full_report = (
+        header + analysis + f"\n\n---\n*GAKMS Intelligence Report — {now_str}*"
+    )
+
+    deep_reads: list[dict[str, str]] = []
+    if "# 3. 장문 딥리드" in analysis:
+        section_start = analysis.index("# 3. 장문 딥리드")
+        section_end = (
+            analysis.index("# 4.")
+            if "# 4." in analysis[section_start + 1 :]
+            else len(analysis)
+        )
+        section_end = (
+            analysis.index("# 4.", section_start + 1)
+            if "# 4." in analysis[section_start + 1 :]
+            else len(analysis)
+        )
+        deep_section = analysis[section_start:section_end].strip()
+        articles = deep_section.split("- **제목**:")
+        for art in articles[1:]:
+            title_line = art.split("\n")[0].strip()
+            title_clean = re.sub(r"\[|\]|\(http[^\)]*\)", "", title_line).strip()
+            slug = re.sub(r"[^a-zA-Z0-9가-힣_-]+", "-", title_clean[:60]).strip("-")
+            deep_reads.append(
+                {
+                    "title": title_clean,
+                    "slug": slug,
+                    "content": f"# 딥리드: {title_clean}\n\n- **제목**:{art.strip()}",
+                }
+            )
+
+    return full_report, deep_reads
 
 
 async def run_daily_pipeline(hours: int = 12):
@@ -707,7 +753,7 @@ async def run_daily_pipeline(hours: int = 12):
     run_time = f"{elapsed:.0f}초"
 
     print("\n  Generating intelligence report (LLM)...")
-    report = await generate_intelligence_report(
+    report, deep_reads = await generate_intelligence_report(
         llm_client=llm_client,
         model_name=model_name,
         trends=trends,
@@ -718,16 +764,25 @@ async def run_daily_pipeline(hours: int = 12):
 
     report_dir = Path("knowledge_base/reports")
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_path = report_dir / f"{now.strftime('%Y-%m-%d_%H%M')}_intelligence_brief.md"
+    ts_slug = now.strftime("%Y-%m-%d_%H%M")
+    report_path = report_dir / f"{ts_slug}_intelligence_brief.md"
     report_path.write_text(report, encoding="utf-8")
     print(f"\n  Report: {report_path}")
+
+    if deep_reads:
+        deepread_dir = report_dir / "deep_reads"
+        deepread_dir.mkdir(parents=True, exist_ok=True)
+        for dr in deep_reads:
+            dr_path = deepread_dir / f"{ts_slug}_{dr['slug'][:40]}.md"
+            dr_path.write_text(dr["content"], encoding="utf-8")
+            print(f"  Deep read: {dr_path.name}")
 
     from config.notification import notify_all
 
     notif_results = notify_all(
         settings,
         report,
-        report_title=f"📰 기술 트렌드 — {now.strftime('%Y-%m-%d %H:%M')}",
+        report_title=f"📰 기술 인텔리전스 — {now.strftime('%Y-%m-%d %H:%M')}",
     )
     for channel, status in notif_results.items():
         print(f"  Notification [{channel}]: {status}")
