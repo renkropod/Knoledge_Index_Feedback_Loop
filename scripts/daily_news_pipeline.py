@@ -271,72 +271,125 @@ def detect_trends(
     }
 
 
-def generate_korean_report(
+def _build_structured_input(
+    trends: dict[str, Any],
+    stories: list[dict[str, Any]],
+    stats: dict[str, Any],
+) -> str:
+    lines: list[str] = []
+    lines.append(f"수집 문서: {stats.get('docs_collected', 0)}건")
+    lines.append(
+        f"신규 엔티티: {trends['new_entities_count']}개 (총 {trends['total_entities']}개)"
+    )
+    lines.append(f"KB 성장: +{trends['growth']} 엔티티")
+    lines.append(f"커뮤니티: {trends['total_communities']}개")
+    lines.append("")
+
+    if trends["hot_entities"]:
+        lines.append("[핫 엔티티]")
+        for e in trends["hot_entities"][:15]:
+            lines.append(f"- {e['name']} (유형: {e['type']}, 연결도: {e['degree']})")
+        lines.append("")
+
+    if trends["type_distribution"]:
+        lines.append("[신규 엔티티 유형]")
+        for etype, count in trends["type_distribution"].items():
+            lines.append(f"- {etype}: {count}")
+        lines.append("")
+
+    if trends["active_communities"]:
+        lines.append("[활성 커뮤니티]")
+        for c in trends["active_communities"][:10]:
+            lines.append(
+                f"- {c['label'][:60]} ({c['size']}노드, 신규+{c['new_entities']})"
+            )
+        lines.append("")
+
+    top_stories = sorted(stories, key=lambda s: s.get("points", 0), reverse=True)[:20]
+    if top_stories:
+        lines.append("[상위 뉴스]")
+        for s in top_stories:
+            lines.append(
+                f"- [{s.get('points', 0)}pts] {s['title']} ({s.get('source', '?')})"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+INTELLIGENCE_PROMPT = (
+    "너는 12시간 단위 기술 트렌드 인텔리전스 분석가다.\n"
+    "입력은 Hacker News, Lobsters 등 개발자 커뮤니티에서 수집한 구조화 리포트다.\n"
+    "기사 목록을 요약하지 말고, '의미 있는 기술 신호'를 추출하고 해석하라.\n\n"
+    "원칙:\n"
+    "1. 입력 리포트에 없는 사실을 추가하지 마라.\n"
+    "2. 모든 핵심 주장에 리포트 내부 근거를 붙여라.\n"
+    "3. 단일 뉴스보다 엔티티·커뮤니티·뉴스가 동시에 가리키는 흐름을 우선하라.\n"
+    "4. 정치/사회 이슈는 기술 생태계에 실질적 영향을 주는 경우에만.\n"
+    "5. '상승','약화' 등 방향성 표현은 증감 근거가 있을 때만. 없으면 '단면 관측'이라 표시.\n"
+    "6. 유사 엔티티와 뉴스는 하나의 신호로 묶어라.\n"
+    "7. 간결하지만 밀도 높게.\n"
+    "8. 과장 대신 판단 근거와 불확실성을 분리.\n\n"
+    "중요도 기준: 기술적 파급력, 개발자 실무 관련성, 반복 등장, 커뮤니티 확산도, 후속 추적 가치\n\n"
+    "[출력 형식 — 반드시 이 구조를 따라라]\n\n"
+    "# 1. 총평\n"
+    "이번 12시간에서 가장 중요한 변화 3개를 3문장 이내로.\n\n"
+    "# 2. 핵심 신호 (상위 5개)\n"
+    "각 항목:\n"
+    "- **신호명**:\n"
+    "- 분류: 신규 / 지속 / 이벤트성 / 잡음 후보\n"
+    "- 중요도: 1~5\n"
+    "- 근거: 관련 엔티티, 커뮤니티, 뉴스 인용\n"
+    "- 해석: 왜 중요한가\n"
+    "- 지속 가능성: 단기 / 중기 / 장기 / 판단 보류\n"
+    "- 실무 액션: 연구자 / 엔지니어 / 제품·전략 관점\n\n"
+    "# 3. 영역별 해석\n"
+    "4개 영역: AI/LLM, 개발도구/언어, 시스템/OS/인프라, 정책/규제\n"
+    "각 영역: 관측 내용 / 의미 / 다음 12시간 체크포인트\n\n"
+    "# 4. 잡음 제거\n"
+    "과대평가되기 쉬운 항목 3개 + 장기 신호가 아닐 이유.\n\n"
+    "# 5. 모니터링 질문\n"
+    "다음 12시간 추적 질문 7개.\n\n"
+    "# 6. 후속 수집 쿼리\n"
+    "다음 크롤링에서 사용할 키워드 10개. 엔티티명 그대로, 너무 일반적인 표현 회피.\n\n"
+    "---\n"
+    "[입력 데이터]\n"
+)
+
+
+async def generate_intelligence_report(
+    llm_client: Any,
+    model_name: str,
     trends: dict[str, Any],
     stories: list[dict[str, Any]],
     run_time: str,
     stats: dict[str, Any],
 ) -> str:
-    now_kst = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    structured_input = _build_structured_input(trends, stories, stats)
+    prompt = INTELLIGENCE_PROMPT + structured_input
 
-    lines = [
-        f"# 📰 기술 트렌드 리포트",
-        f"**생성 시각**: {now_kst}",
-        f"**수집 기간**: 최근 12시간",
-        f"**처리 시간**: {run_time}",
-        "",
-        "---",
-        "",
-        "## 📊 이번 업데이트 요약",
-        f"- 수집 문서: **{stats.get('docs_collected', 0)}건**",
-        f"- 신규 엔티티: **{trends['new_entities_count']}개** (총 {trends['total_entities']}개)",
-        f"- KB 성장: +{trends['growth']} 엔티티",
-        f"- 활성 커뮤니티: {trends['total_communities']}개",
-        "",
-    ]
+    try:
+        resp = await llm_client.messages.create(
+            model=model_name,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        analysis = resp.content[0].text
+    except Exception as exc:
+        analysis = f"(LLM 분석 생성 실패: {exc})\n\n" + _build_structured_input(
+            trends, stories, stats
+        )
 
-    if trends["hot_entities"]:
-        lines.append("## 🔥 핫 엔티티 (연결도 상위)")
-        lines.append("")
-        lines.append("| 순위 | 엔티티 | 유형 | 연결도 |")
-        lines.append("|------|--------|------|--------|")
-        for i, e in enumerate(trends["hot_entities"][:10], 1):
-            lines.append(f"| {i} | **{e['name']}** | {e['type']} | {e['degree']} |")
-        lines.append("")
+    header = (
+        f"# 기술 트렌드 인텔리전스 브리핑\n"
+        f"**생성**: {now_str} | **수집 기간**: 최근 12시간 | **처리**: {run_time}\n"
+        f"**데이터**: {stats.get('docs_collected', 0)}건 수집, "
+        f"+{trends['new_entities_count']} 엔티티, "
+        f"{trends['total_communities']} 커뮤니티\n\n---\n\n"
+    )
 
-    if trends["type_distribution"]:
-        lines.append("## 📁 신규 엔티티 유형 분포")
-        lines.append("")
-        for etype, count in trends["type_distribution"].items():
-            bar = "█" * min(count, 30)
-            lines.append(f"- {etype}: {bar} {count}")
-        lines.append("")
-
-    if trends["active_communities"]:
-        lines.append("## 🌐 활성 커뮤니티")
-        lines.append("")
-        for c in trends["active_communities"][:7]:
-            lines.append(
-                f"- **{c['label'][:50]}** ({c['size']}개 노드, +{c['new_entities']}개 신규)"
-            )
-        lines.append("")
-
-    top_stories = sorted(stories, key=lambda s: s.get("points", 0), reverse=True)[:15]
-    if top_stories:
-        lines.append("## 📰 상위 뉴스")
-        lines.append("")
-        for i, s in enumerate(top_stories, 1):
-            pts = s.get("points", 0)
-            title = s["title"]
-            url = s.get("url", "")
-            source = s.get("source", "?")
-            link = f"[{title}]({url})" if url else title
-            lines.append(f"{i}. {link} — {pts}pts ({source})")
-        lines.append("")
-
-    lines.append("---")
-    lines.append(f"*GAKMS 자동 생성 리포트*")
-    return "\n".join(lines)
+    return header + analysis + f"\n\n---\n*GAKMS Intelligence Report — {now_str}*"
 
 
 async def run_daily_pipeline(hours: int = 12):
@@ -566,7 +619,10 @@ async def run_daily_pipeline(hours: int = 12):
     elapsed = time.perf_counter() - t_start
     run_time = f"{elapsed:.0f}초"
 
-    report = generate_korean_report(
+    print("\n  Generating intelligence report (LLM)...")
+    report = await generate_intelligence_report(
+        llm_client=llm_client,
+        model_name=model_name,
         trends=trends,
         stories=new_stories,
         run_time=run_time,
@@ -575,7 +631,7 @@ async def run_daily_pipeline(hours: int = 12):
 
     report_dir = Path("knowledge_base/reports")
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_path = report_dir / f"{now.strftime('%Y-%m-%d_%H%M')}_trend_report.md"
+    report_path = report_dir / f"{now.strftime('%Y-%m-%d_%H%M')}_intelligence_brief.md"
     report_path.write_text(report, encoding="utf-8")
     print(f"\n  Report: {report_path}")
 
