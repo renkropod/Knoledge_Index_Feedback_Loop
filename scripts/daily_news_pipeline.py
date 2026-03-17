@@ -163,6 +163,90 @@ async def fetch_recent_devto(session: aiohttp.ClientSession) -> list[dict[str, A
     return stories
 
 
+async def fetch_reddit(session: aiohttp.ClientSession) -> list[dict[str, Any]]:
+    subreddits = ["programming", "technology", "MachineLearning", "netsec", "devops"]
+    stories: list[dict[str, Any]] = []
+    for sub in subreddits:
+        url = f"https://old.reddit.com/r/{sub}/top/.json?t=day&limit=25"
+        try:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    continue
+                data = await resp.json()
+        except Exception:
+            continue
+        for post in data.get("data", {}).get("children", []):
+            d = post.get("data", {})
+            if d.get("stickied"):
+                continue
+            stories.append(
+                {
+                    "id": f"reddit_{d.get('id', '')}",
+                    "title": d.get("title", ""),
+                    "url": d.get("url", ""),
+                    "points": d.get("score", 0),
+                    "author": d.get("author", ""),
+                    "created_at": int(d.get("created_utc", 0)),
+                    "num_comments": d.get("num_comments", 0),
+                    "source": f"r/{sub}",
+                }
+            )
+        await asyncio.sleep(1.0)
+    return stories
+
+
+async def fetch_github_trending(session: aiohttp.ClientSession) -> list[dict[str, Any]]:
+    stories: list[dict[str, Any]] = []
+    for period in ["daily"]:
+        try:
+            async with session.get(
+                f"https://github.com/trending?since={period}"
+            ) as resp:
+                if resp.status != 200:
+                    continue
+                html = await resp.text()
+        except Exception:
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        for repo in soup.select("article.Box-row")[:25]:
+            name_el = repo.select_one("h2 a")
+            desc_el = repo.select_one("p")
+            if not name_el:
+                continue
+            repo_name = name_el.get_text(strip=True).replace("\n", "").replace(" ", "")
+            desc = desc_el.get_text(strip=True) if desc_el else ""
+            href = name_el.get("href", "")
+            url = f"https://github.com{href}" if href else ""
+
+            stars_text = ""
+            for span in repo.select("span.d-inline-block"):
+                t = span.get_text(strip=True)
+                if "stars" in t.lower():
+                    stars_text = t
+                    break
+            stars = 0
+            if stars_text:
+                import re as _re
+
+                m = _re.search(r"([\d,]+)", stars_text)
+                if m:
+                    stars = int(m.group(1).replace(",", ""))
+
+            stories.append(
+                {
+                    "id": f"gh_{repo_name.replace('/', '_')}",
+                    "title": f"{repo_name}: {desc[:100]}" if desc else repo_name,
+                    "url": url,
+                    "points": stars,
+                    "author": repo_name.split("/")[0] if "/" in repo_name else "",
+                    "created_at": 0,
+                    "num_comments": 0,
+                    "source": "github_trending",
+                }
+            )
+    return stories
+
+
 async def fetch_rss_feeds(session: aiohttp.ClientSession) -> list[dict[str, Any]]:
     feeds = [
         ("TechCrunch", "https://techcrunch.com/feed/"),
@@ -425,14 +509,16 @@ async def run_daily_pipeline(hours: int = 12):
     timeout = aiohttp.ClientTimeout(total=15)
 
     async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-        hn, lob, devto, rss = await asyncio.gather(
+        hn, lob, devto, rss, reddit, gh = await asyncio.gather(
             fetch_recent_hn(session, hours=hours),
             fetch_recent_lobsters(session),
             fetch_recent_devto(session),
             fetch_rss_feeds(session),
+            fetch_reddit(session),
+            fetch_github_trending(session),
         )
 
-    all_raw = hn + lob + devto + rss
+    all_raw = hn + lob + devto + rss + reddit + gh
     new_stories: list[dict[str, Any]] = []
     for s in all_raw:
         if s["id"] in seen_ids:
@@ -445,7 +531,8 @@ async def run_daily_pipeline(hours: int = 12):
         seen_ids.add(s["id"])
 
     print(
-        f"\n  Sources: HN={len(hn)}, Lobsters={len(lob)}, Dev.to={len(devto)}, RSS={len(rss)}"
+        f"\n  Sources: HN={len(hn)}, Lobsters={len(lob)}, Dev.to={len(devto)}, "
+        f"Reddit={len(reddit)}, GitHub={len(gh)}, RSS={len(rss)}"
     )
     print(f"  New (unseen): {len(new_stories)}")
 
