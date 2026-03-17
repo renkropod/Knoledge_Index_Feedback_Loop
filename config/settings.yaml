@@ -21,6 +21,6 @@ research:
   schedule_cron: "0 */6 * * *"
 
 notification:
-  discord_webhook_url: ""
+  discord_webhook_url: "https://discord.com/api/webhooks/1483433124351180873/o7M-5JKwd_SSJ3Rc10l9fzcdoUxIf_Z1nV6d-7zLrIvOu4OqBeFxF9C3Nb2sPpGb4I4H"
   obsidian_vault_path: ""
   obsidian_folder: "Tech Trends"

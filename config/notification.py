@@ -5,7 +5,8 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.request import Request, urlopen
+
+import requests as _requests
 
 
 def send_discord(webhook_url: str, report_markdown: str, title: str = "") -> bool:
@@ -26,19 +27,22 @@ def send_discord(webhook_url: str, report_markdown: str, title: str = "") -> boo
                 "text": f"GAKMS • {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
             }
 
-        payload = json.dumps({"embeds": [embed]}).encode("utf-8")
-        req = Request(
-            webhook_url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
         try:
-            with urlopen(req, timeout=10) as resp:
-                if resp.status not in (200, 204):
-                    return False
+            resp = _requests.post(
+                webhook_url,
+                json={"embeds": [embed]},
+                headers={"Content-Type": "application/json"},
+                timeout=15,
+            )
+            if resp.status_code not in (200, 204):
+                return False
         except Exception:
             return False
+
+        if i < len(chunks) - 1:
+            import time
+
+            time.sleep(0.5)
 
     return True
 
