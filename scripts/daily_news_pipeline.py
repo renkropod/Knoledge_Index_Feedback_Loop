@@ -403,59 +403,130 @@ def _build_structured_input(
 
 BRIEFING_PROMPT = (
     "너는 12시간 단위 기술 인텔리전스 분석가다. 연구자·엔지니어를 위한 브리핑을 작성하라.\n\n"
-    "원칙:\n"
-    "- 입력 리포트에 없는 사실 금지. 모든 주장에 리포트 내부 근거.\n"
-    "- 유사 항목은 하나의 신호로 묶어라. 과장 대신 불확실성 명시.\n"
-    "- '상승/약화' 방향성 표현은 증감 근거 있을 때만. 없으면 '단면 관측'.\n"
-    "- 트렌드와 지식을 분리하라. 시끄러운 주제가 배울 게 많은 주제를 밀어내면 안 된다.\n\n"
-    "점수 체계 (각 항목에 반드시 3축 점수를 붙여라):\n"
-    "- 트렌드 점수(T): 커뮤니티에서 얼마나 뜨거운가 (1~5)\n"
-    "- 지식 점수(K): 읽었을 때 얼마나 배움이 남는가 (1~5)\n"
-    "- 연구 적합도(R): 논문/연구/시스템 이해로 연결될 가능성 (1~5)\n\n"
-    "[출력 형식 — 반드시 이 구조, 이 순서를 따라라]\n\n"
+    "핵심 원칙:\n"
+    "- 입력에 없는 사실 금지. 모든 주장에 입력 내부 근거.\n"
+    "- '확인된 내용'과 '해석'과 '미확인 추정'을 명확히 분리하라.\n"
+    "- 방향성 표현(상승/약화)은 증감 근거 있을 때만. 없으면 '단면 관측'.\n"
+    "- 시끄러운 주제(T높음)가 배울 게 많은 주제(K높음)를 밀어내면 안 된다.\n\n"
+    "3축 점수 (모든 항목에 필수):\n"
+    "- T(트렌드): 커뮤니티에서 얼마나 뜨거운가 1~5\n"
+    "- K(지식): 읽으면 얼마나 배움이 남는가 1~5\n"
+    "- R(연구): 논문/시스템 이해로 연결 가능성 1~5\n\n"
+    "신호 분류 (이 중 하나만 사용):\n"
+    "- 반복 관측: 과거 리포트에서 2회+ 등장 증거 있음\n"
+    "- 초기 신호: 처음 관측, 후속 추적 가치 있음\n"
+    "- 이벤트성: 단일 사건, 구조적 변화 근거 부족\n"
+    "- 잡음 후보: T는 높지만 K/R이 낮아 과대평가 가능\n"
+    "※ '지속'이라 판정하려면 반드시 과거 리포트 데이터에서 근거를 인용하라.\n\n"
+    "근거 수준 (각 딥리드에 반드시 표시):\n"
+    "- A: 본문/초록/코드/공식문서 확인 (원문 텍스트 제공된 경우)\n"
+    "- B: 제목+소개+본문 발췌 기반\n"
+    "- C: 제목+커뮤니티반응 기반\n"
+    "- D: 제목만 기반 추정\n\n"
+    "원문 유형 분류 (각 딥리드에 표시):\n"
+    "논문 / 실증연구 / 엔지니어링블로그 / 제품발표 / ShowHN / LaunchHN / 토론글 / 뉴스\n\n"
+    "[출력 형식 — 이 구조, 이 순서 필수]\n\n"
     "# 0. 오늘 꼭 읽을 글 3개\n"
-    "지식 점수(K)와 연구 적합도(R)가 가장 높은 글 3개를 선택하라.\n"
-    "각 글:\n"
-    "- 제목 + URL + 출처\n"
-    "- 한줄 이유 (왜 이 글이 최우선인가)\n"
-    "- T/K/R 점수\n\n"
+    "K+R 합산 최상위 3개. 각 글에 읽기 권고 표시:\n"
+    "- 🔴 즉시 정독 / 🟡 빠른 스캔 / ⚪ 후속 검증 대기\n"
+    "- 제목 + 원문URL + HN토론URL(있으면) + 출처\n"
+    "- 한줄 이유 + T/K/R + 원문유형 + 근거수준\n\n"
     "# 1. 한 화면 요약\n"
-    "진짜 변화만 3줄. 관측형 문장으로.\n\n"
+    "3줄. 관측형. 장기 추세 판단 근거 제한적이면 그렇다고 명시.\n\n"
     "# 2. 핵심 신호 (5개)\n"
     "각 항목:\n"
-    "- **신호명**: / 분류: 신규|지속|이벤트성|잡음후보\n"
-    "- T/K/R 점수\n"
+    "- **신호명**: / 분류: 반복관측|초기신호|이벤트성|잡음후보\n"
+    "- T/K/R\n"
     "- 근거: 엔티티, 커뮤니티, 뉴스 인용\n"
-    "- 해석 + 불확실성\n"
+    "- 분류 판정 이유: (왜 이 분류인지 1문장)\n"
+    "- 해석 (확인된 것) + 불확실성 (미확인인 것) 분리\n"
     "- 실무 액션: 연구자 / 엔지니어 / 전략\n\n"
     "# 3. 장문 딥리드\n"
-    "지식 점수(K) ≥ 4인 글을 최대 5개 선택하여 각각 상세 분석하라.\n"
-    "각 글마다 반드시 아래 항목 전부 작성 (200~400자 이상):\n"
-    "- **제목**: + URL\n"
-    "- **T/K/R**: 점수\n"
-    "- **왜 읽어야 하는가**:\n"
-    "- **이 글이 답하는 핵심 질문**:\n"
-    "- **읽고 나면 무엇을 배우는가**:\n"
-    "- **누구에게 특히 유익한가**:\n"
-    "- **기술 깊이**: 입문 / 중급 / 고급\n"
-    "- **분류**: 트렌드성 / 지식성 / 혼합\n"
-    "- **같이 봐야 할 1차 자료**: (있으면)\n\n"
+    "K≥4인 글 최대 5개. 원문 텍스트가 제공된 글 우선.\n"
+    "각 글마다 아래 전부 작성:\n"
+    "- **제목**: + 원문URL\n"
+    "- **원문유형**: / **근거수준**: A~D / **T/K/R**:\n"
+    "- **읽기 권고**: 🔴 즉시 정독 / 🟡 빠른 스캔 / ⚪ 후속 검증 대기\n"
+    "- **확인된 내용**: 입력 데이터에서 실제 확인할 수 있는 사실만\n"
+    "- **해석**: 위 사실을 기반으로 한 분석가의 판단\n"
+    "- **미확인**: 제목상 그럴듯하지만 본문 검증 전인 추정. 있으면 명시, 없으면 '없음'\n"
+    "- **핵심 질문**: 이 글이 답하는 질문\n"
+    "- **배움**: 읽고 나면 무엇을 알게 되는가\n"
+    "- **대상**: 누구에게 유익한가\n"
+    "- **깊이**: 입문/중급/고급\n"
+    "- **1차 자료**: 같이 볼 것 (있으면)\n\n"
     "# 4. 지식 노트\n"
-    "## 4-1. 오늘 새로 등장한 개념 3개\n"
-    "각각: 개념명, 정의, 왜 지금 등장했는가, 관련 글\n"
-    "## 4-2. 꼭 알아야 할 배경 개념 3개\n"
-    "이번 뉴스를 이해하려면 알아야 하는 기존 개념\n"
-    "## 4-3. 도구/시스템 카드 3개\n"
-    "이름, 한줄 설명, 주요 용도, 대안, URL\n"
-    "## 4-4. 열린 연구 질문 3개\n"
-    "이번 데이터에서 파생되는, 아직 답이 없는 질문\n"
-    "## 4-5. 용어 정리\n"
-    "이번 리포트에서 나온 전문 용어 5~8개: 용어 = 정의\n\n"
+    "## 4-1. 신규 개념 3개\n"
+    "각각: 이름 / 정의 / 왜 지금 / 관련 글 / 지식카드 연결 (slug)\n"
+    "## 4-2. 배경 개념 3개\n"
+    "이번 뉴스 이해에 필요한 기존 개념\n"
+    "## 4-3. 도구 카드 3개\n"
+    "이름 / 한줄 설명 / 용도 / 대안 / URL\n"
+    "## 4-4. 열린 질문 3개\n"
+    "## 4-5. 용어 5~8개: 용어 = 정의\n\n"
     "# 5. 다음 12시간 체크리스트\n"
-    "검증 가능한 질문 7개 + 후속 수집 키워드 10개.\n\n"
+    "검증 가능한 질문 7개 + 키워드 10개.\n\n"
     "---\n"
     "[입력 데이터]\n"
 )
+
+
+async def _fetch_deep_read_content(
+    session: aiohttp.ClientSession,
+    stories: list[dict[str, Any]],
+    max_articles: int = 5,
+) -> dict[str, str]:
+    url_to_content: dict[str, str] = {}
+    urls = [s["url"] for s in stories if s.get("url")][:max_articles]
+    sem = asyncio.Semaphore(5)
+
+    async def _fetch(url: str) -> tuple[str, str]:
+        async with sem:
+            return url, await fetch_article_text(session, url)
+
+    results = await asyncio.gather(*[_fetch(u) for u in urls])
+    for url, text in results:
+        if text and len(text) > 100:
+            url_to_content[url] = text[:2000]
+    return url_to_content
+
+
+def _build_deep_input(
+    stories: list[dict[str, Any]],
+    article_contents: dict[str, str],
+) -> str:
+    lines: list[str] = []
+    for s in stories:
+        url = s.get("url", "")
+        content = article_contents.get(url, "")
+        evidence = "A (본문 확인)" if content else "C (제목+반응)"
+        lines.append(f"- [{s.get('points', 0)}pts] {s['title']}")
+        lines.append(f"  URL: {url}")
+        lines.append(f"  출처: {s.get('source', '?')}")
+        lines.append(f"  근거수준: {evidence}")
+        if content:
+            lines.append(f"  본문 발췌: {content[:500]}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _load_past_report_context(report_dir: Path, n: int = 3) -> str:
+    reports = sorted(report_dir.glob("*_intelligence_brief.md"), reverse=True)[:n]
+    if not reports:
+        return "(과거 리포트 없음 — '반복 관측' 판정 불가, 모두 '초기 신호'로 처리)\n"
+
+    lines = ["[과거 리포트 요약 — '반복 관측' 판정용]"]
+    for rp in reports:
+        text = rp.read_text(encoding="utf-8")
+        lines.append(f"\n--- {rp.stem} ---")
+        for section in ["# 1. 한 화면 요약", "# 2. 핵심 신호"]:
+            if section in text:
+                start = text.index(section)
+                end = text.find("\n# ", start + len(section))
+                if end < 0:
+                    end = min(start + 1500, len(text))
+                lines.append(text[start:end][:800])
+    return "\n".join(lines)
 
 
 async def generate_intelligence_report(
@@ -465,15 +536,33 @@ async def generate_intelligence_report(
     stories: list[dict[str, Any]],
     run_time: str,
     stats: dict[str, Any],
+    article_contents: dict[str, str] | None = None,
 ) -> tuple[str, list[dict[str, str]]]:
     now_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    structured_input = _build_structured_input(trends, stories, stats)
-    prompt = BRIEFING_PROMPT + structured_input
+    report_dir = Path("knowledge_base/reports")
+
+    structured_base = _build_structured_input(trends, stories, stats)
+
+    top_stories = sorted(stories, key=lambda s: s.get("points", 0), reverse=True)[:20]
+    deep_input = _build_deep_input(top_stories, article_contents or {})
+
+    past_context = _load_past_report_context(report_dir)
+
+    full_input = (
+        structured_base[:1500]
+        + "\n[상위 뉴스 (원문 발췌 포함)]\n"
+        + deep_input[:2000]
+        + "\n"
+        + past_context[:800]
+    )
+
+    prompt = BRIEFING_PROMPT + full_input
+    prompt = prompt[:5500]
 
     try:
         resp = await llm_client.messages.create(
             model=model_name,
-            max_tokens=6144,
+            max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
         analysis = resp.content[0].text
@@ -493,31 +582,29 @@ async def generate_intelligence_report(
     )
 
     deep_reads: list[dict[str, str]] = []
-    if "# 3. 장문 딥리드" in analysis:
-        section_start = analysis.index("# 3. 장문 딥리드")
-        section_end = (
-            analysis.index("# 4.")
-            if "# 4." in analysis[section_start + 1 :]
-            else len(analysis)
-        )
-        section_end = (
-            analysis.index("# 4.", section_start + 1)
-            if "# 4." in analysis[section_start + 1 :]
-            else len(analysis)
-        )
-        deep_section = analysis[section_start:section_end].strip()
-        articles = deep_section.split("- **제목**:")
-        for art in articles[1:]:
-            title_line = art.split("\n")[0].strip()
-            title_clean = re.sub(r"\[|\]|\(http[^\)]*\)", "", title_line).strip()
-            slug = re.sub(r"[^a-zA-Z0-9가-힣_-]+", "-", title_clean[:60]).strip("-")
-            deep_reads.append(
-                {
-                    "title": title_clean,
-                    "slug": slug,
-                    "content": f"# 딥리드: {title_clean}\n\n- **제목**:{art.strip()}",
-                }
+    if "# 3." in analysis:
+        try:
+            s3 = analysis.index("# 3.")
+            s4 = (
+                analysis.index("# 4.", s3 + 4)
+                if "# 4." in analysis[s3 + 4 :]
+                else len(analysis)
             )
+            section = analysis[s3:s4].strip()
+            parts = re.split(r"\n- \*\*제목\*\*:", section)
+            for part in parts[1:]:
+                first_line = part.split("\n")[0].strip()
+                title = re.sub(r"\[|\]|\(http[^\)]*\)", "", first_line).strip()
+                slug = re.sub(r"[^a-zA-Z0-9가-힣_-]+", "-", title[:60]).strip("-")
+                deep_reads.append(
+                    {
+                        "title": title,
+                        "slug": slug,
+                        "content": f"# 딥리드: {title}\n\n- **제목**:{part.strip()}",
+                    }
+                )
+        except (ValueError, IndexError):
+            pass
 
     return full_report, deep_reads
 
@@ -752,6 +839,16 @@ async def run_daily_pipeline(hours: int = 12):
     elapsed = time.perf_counter() - t_start
     run_time = f"{elapsed:.0f}초"
 
+    print("\n  2nd pass: fetching top article content for deep reads...")
+    top_for_deep = sorted(new_stories, key=lambda s: s.get("points", 0), reverse=True)[
+        :10
+    ]
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+        article_contents = await _fetch_deep_read_content(
+            session, top_for_deep, max_articles=10
+        )
+    print(f"  Deep read content: {len(article_contents)}/{len(top_for_deep)} articles")
+
     print("\n  Generating intelligence report (LLM)...")
     report, deep_reads = await generate_intelligence_report(
         llm_client=llm_client,
@@ -760,6 +857,7 @@ async def run_daily_pipeline(hours: int = 12):
         stories=new_stories,
         run_time=run_time,
         stats={"docs_collected": len(new_stories)},
+        article_contents=article_contents,
     )
 
     report_dir = Path("knowledge_base/reports")
