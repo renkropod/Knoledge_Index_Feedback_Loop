@@ -281,6 +281,24 @@ class DualLevelRetriever:
         delta = now - parsed_ts.astimezone(timezone.utc)
         return max(0.0, delta.total_seconds() / 86400.0)
 
+    _community_cache: list[dict] | None = None
+    _community_cache_size: int = 0
+
+    def _get_communities_cached(self) -> list[dict]:
+        current_size = self.graph_store.graph.number_of_nodes()
+        if (
+            self._community_cache is None
+            or abs(current_size - self._community_cache_size) > 50
+        ):
+            try:
+                DualLevelRetriever._community_cache = (
+                    self.graph_store.detect_communities()
+                )
+                DualLevelRetriever._community_cache_size = current_size
+            except Exception:
+                return []
+        return self._community_cache or []
+
     def _apply_community_boost(
         self, candidates: list[dict], query_entities: list[str]
     ) -> list[dict]:
@@ -290,11 +308,7 @@ class DualLevelRetriever:
         if not hasattr(self.graph_store, "detect_communities"):
             return candidates
 
-        try:
-            communities = self.graph_store.detect_communities()
-        except Exception:
-            return candidates
-
+        communities = self._get_communities_cached()
         if not communities:
             return candidates
 

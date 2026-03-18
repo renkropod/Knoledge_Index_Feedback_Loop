@@ -278,7 +278,7 @@ async def build_monthly_kb():
     print(f"  KB before: {kg.get_stats()['total_nodes']} entities")
 
     headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) GAKMS-Bot/1.0"}
-    timeout = aiohttp.ClientTimeout(total=15)
+    timeout = aiohttp.ClientTimeout()
 
     stats = {
         "stories_fetched": 0,
@@ -340,17 +340,19 @@ async def build_monthly_kb():
 
             tasks = [fetch_with_sem(url) for url in article_urls]
             article_texts = await asyncio.gather(*tasks)
+            url_to_text = dict(zip(article_urls, article_texts))
         timers["fetch_articles"] = t.elapsed
         fetched_count = sum(1 for t in article_texts if t)
         stats["articles_fetched"] = fetched_count
         print(f"     Articles with content: {fetched_count}/{len(article_urls)}")
 
     all_documents: list[dict[str, Any]] = []
-    for i, story in enumerate(all_stories):
+    for story in all_stories:
         doc_text = f"Title: {story['title']}\n"
         doc_text += f"Points: {story['points']}, Author: {story['author']}, Comments: {story['num_comments']}\n"
-        if i < len(article_texts) and article_texts[i]:
-            doc_text += f"\n{article_texts[i][:3000]}\n"
+        article_text = url_to_text.get(story.get("url", ""), "")
+        if article_text:
+            doc_text += f"\n{article_text[:3000]}\n"
 
         ts_val = story.get("created_at", 0)
         created = (
@@ -378,7 +380,9 @@ async def build_monthly_kb():
 
     extraction_sem = asyncio.Semaphore(5)
 
-    async def _extract_korean(doc_info: dict, text: str) -> tuple[dict, dict]:
+    async def _extract_korean(
+        doc_info: dict[str, Any], text: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
             prompt_text = KOREAN_EXTRACTION_PROMPT_TPL + text
             async with extraction_sem:
@@ -392,6 +396,24 @@ async def build_monthly_kb():
             if not json_match:
                 return doc_info, {"entities": [], "relations": []}
             parsed = json.loads(json_match.group())
+            entities = parsed.get("entities", [])
+            relations = parsed.get("relations", [])
+            parsed["entities"] = [
+                ent
+                for ent in entities
+                if isinstance(ent, dict)
+                and isinstance(ent.get("name"), str)
+                and ent.get("name", "").strip()
+            ]
+            parsed["relations"] = [
+                rel
+                for rel in relations
+                if isinstance(rel, dict)
+                and isinstance(rel.get("source"), str)
+                and rel.get("source", "").strip()
+                and isinstance(rel.get("target"), str)
+                and rel.get("target", "").strip()
+            ]
             return doc_info, parsed
         except Exception:
             return doc_info, {"entities": [], "relations": []}

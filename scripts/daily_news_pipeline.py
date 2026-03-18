@@ -628,7 +628,7 @@ async def run_daily_pipeline(hours: int = 12):
     print(f"  Seen IDs: {len(seen_ids)}")
 
     headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) GAKMS-DailyBot/1.0"}
-    timeout = aiohttp.ClientTimeout(total=15)
+    timeout = aiohttp.ClientTimeout()
 
     async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
         hn, lob, devto, rss, reddit, gh = await asyncio.gather(
@@ -642,13 +642,14 @@ async def run_daily_pipeline(hours: int = 12):
 
     all_raw = hn + lob + devto + rss + reddit + gh
     new_stories: list[dict[str, Any]] = []
+    seen_titles: set[str] = set()
     for s in all_raw:
         if s["id"] in seen_ids:
             continue
-        if s["title"].lower().strip() in {
-            ss["title"].lower().strip() for ss in new_stories
-        }:
+        title_key = s["title"].lower().strip()
+        if title_key in seen_titles:
             continue
+        seen_titles.add(title_key)
         new_stories.append(s)
         seen_ids.add(s["id"])
 
@@ -667,19 +668,21 @@ async def run_daily_pipeline(hours: int = 12):
         article_urls = [s["url"] for s in new_stories if s.get("url")][:100]
         sem = asyncio.Semaphore(10)
 
-        async def _fetch(url):
+        async def _fetch(url: str) -> str:
             async with sem:
                 return await fetch_article_text(session, url)
 
         article_texts = await asyncio.gather(*[_fetch(u) for u in article_urls])
+    url_to_text = dict(zip(article_urls, article_texts))
     fetched = sum(1 for t in article_texts if t)
     print(f"  Article content: {fetched}/{len(article_urls)}")
 
     documents: list[dict[str, Any]] = []
-    for i, story in enumerate(new_stories):
+    for story in new_stories:
         text = f"Title: {story['title']}\nPoints: {story['points']}, Source: {story['source']}\n"
-        if i < len(article_texts) and article_texts[i]:
-            text += f"\n{article_texts[i][:3000]}\n"
+        article_text = url_to_text.get(story.get("url", ""), "")
+        if article_text:
+            text += f"\n{article_text[:3000]}\n"
         ts_val = story.get("created_at", 0)
         created = (
             datetime.fromtimestamp(ts_val, tz=timezone.utc)
@@ -702,7 +705,7 @@ async def run_daily_pipeline(hours: int = 12):
     all_relations: list[dict[str, Any]] = []
     extraction_sem = asyncio.Semaphore(5)
 
-    async def _extract(doc: dict, text: str):
+    async def _extract(doc: dict[str, Any], text: str):
         try:
             prompt = KOREAN_PROMPT + text[:4000]
             async with extraction_sem:
@@ -821,6 +824,42 @@ async def run_daily_pipeline(hours: int = 12):
             )
 
     _save_seen_ids(seen_ids)
+
+    try:
+        from storage.knowledge_cards import KnowledgeCard, KnowledgeCardStore
+
+        card_store = KnowledgeCardStore()
+        today = now.strftime("%Y-%m-%d")
+        for ent in deduped_entities:
+            name = ent.get("name", "")
+            if not name or len(name) < 2:
+                continue
+            card_store.upsert(
+                KnowledgeCard(
+                    slug=re.sub(r"[^a-z0-9-]+", "-", name.lower())[:60].strip("-"),
+                    name=name,
+                    category=ent.get("type", "concept").lower(),
+                    definition=ent.get("description", ""),
+                    why_important="",
+                    related_tools=[],
+                    related_cards=[],
+                    representative_sources=[],
+                    open_questions=[],
+                    history=[
+                        {
+                            "date": today,
+                            "event": "observed in daily pipeline",
+                            "source": "daily_pipeline",
+                        }
+                    ],
+                    first_seen=today,
+                    last_updated=today,
+                    mention_count=1,
+                )
+            )
+        print(f"  Knowledge cards: {card_store.get_stats()['total_cards']} total")
+    except Exception:
+        pass
 
     new_entity_names = {e.get("name", "") for e in deduped_entities}
     trends = detect_trends(kg, new_entity_names, prev_node_count)

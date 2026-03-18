@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import importlib
@@ -8,6 +9,9 @@ import re
 from typing import Any
 
 from bs4 import BeautifulSoup
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 SUPPORTED_EXTENSIONS = {".md", ".pdf", ".html", ".htm", ".txt"}
@@ -50,22 +54,29 @@ class DocumentParser:
 
     def parse_markdown(self, file_path: str) -> ParsedDocument:
         path = Path(file_path)
-        markdown_text = path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            markdown_text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError as exc:
+            LOGGER.warning("Failed to read markdown file %s: %s", file_path, exc)
+            return self._build_document(path, "markdown", "")
         markdown_text = self._strip_frontmatter(markdown_text)
         content = self._markdown_to_structured_text(markdown_text)
         return self._build_document(path, "markdown", content)
 
     def parse_pdf(self, file_path: str) -> ParsedDocument:
-        pdfplumber = importlib.import_module("pdfplumber")
-
         path = Path(file_path)
         pages: list[str] = []
-        with pdfplumber.open(path) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text() or ""
-                page_text = self._normalize_text(page_text)
-                if page_text:
-                    pages.append(page_text)
+        try:
+            pdfplumber = importlib.import_module("pdfplumber")
+            with pdfplumber.open(path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text() or ""
+                    page_text = self._normalize_text(page_text)
+                    if page_text:
+                        pages.append(page_text)
+        except (OSError, Exception) as exc:
+            LOGGER.warning("Failed to parse PDF file %s: %s", file_path, exc)
+            return self._build_document(path, "pdf", "")
 
         content = "\n\n".join(pages).strip()
         return self._build_document(path, "pdf", content)

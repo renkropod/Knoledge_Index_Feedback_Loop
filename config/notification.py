@@ -92,6 +92,16 @@ def save_to_obsidian(
         filename = f"{now.strftime('%Y-%m-%d_%H%M')}_Tech_Trends.md"
 
     filepath = target_dir / filename
+    try:
+        vault_resolved = vault.resolve()
+        filepath_resolved = filepath.resolve()
+    except OSError:
+        return ""
+    if (
+        filepath_resolved != vault_resolved
+        and vault_resolved not in filepath_resolved.parents
+    ):
+        return ""
     filepath.write_text(report_markdown, encoding="utf-8")
     return str(filepath)
 

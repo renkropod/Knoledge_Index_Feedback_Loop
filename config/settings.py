@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 from dotenv import load_dotenv
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -70,8 +74,12 @@ class Settings:
 
         load_dotenv(dotenv_path=dotenv_file, override=False)
 
-        with config_file.open("r", encoding="utf-8") as fh:
-            raw_config = yaml.safe_load(fh) or {}
+        try:
+            with config_file.open("r", encoding="utf-8") as fh:
+                raw_config = yaml.safe_load(fh) or {}
+        except (OSError, yaml.YAMLError) as exc:
+            LOGGER.warning("Failed to load settings from %s: %s", config_file, exc)
+            raw_config = {}
 
         llm_raw = raw_config.get("llm", {})
         storage_raw = raw_config.get("storage", {})
@@ -129,8 +137,15 @@ class Settings:
                     ],
                 ),
             ),
-            max_sources=_env_int(
-                "GAKMS_RESEARCH_MAX_SOURCES", research_raw.get("max_sources", 15)
+            max_sources=max(
+                1,
+                min(
+                    _env_int(
+                        "GAKMS_RESEARCH_MAX_SOURCES",
+                        research_raw.get("max_sources", 15),
+                    ),
+                    100,
+                ),
             ),
             schedule_cron=_env_str(
                 "GAKMS_RESEARCH_SCHEDULE_CRON",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib
 import os
 import tempfile
 import threading
@@ -8,7 +9,7 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
-import networkx as nx
+nx = importlib.import_module("networkx")
 
 
 class KnowledgeGraph:
@@ -17,7 +18,7 @@ class KnowledgeGraph:
         self._lock = threading.RLock()
         self.graph = self._load_or_create()
 
-    def _load_or_create(self) -> nx.DiGraph:
+    def _load_or_create(self) -> Any:
         if not os.path.exists(self.graph_path):
             return nx.DiGraph()
 
@@ -57,11 +58,11 @@ class KnowledgeGraph:
 
     def incremental_update(
         self,
-        entities: list,
-        relations: list,
+        entities: list[Any],
+        relations: list[Any],
         source_doc: str,
         timestamp: datetime | None = None,
-    ) -> dict:
+    ) -> dict[str, int]:
         now = (timestamp or datetime.now(tz=timezone.utc)).isoformat()
         stats = {
             "nodes_added": 0,
@@ -166,6 +167,8 @@ class KnowledgeGraph:
                 edge_data.setdefault("sources", [])
                 if source_doc not in edge_data["sources"]:
                     edge_data["sources"].append(source_doc)
+                if len(edge_data["sources"]) > 5:
+                    edge_data["sources"] = edge_data["sources"][-5:]
                 if relation_name:
                     edge_data["relation"] = relation_name
                 if description:
@@ -216,7 +219,7 @@ class KnowledgeGraph:
                 )
             self._save()
 
-    def get_neighbors(self, entity: str, hops: int = 1) -> list[dict]:
+    def get_neighbors(self, entity: str, hops: int = 1) -> list[dict[str, Any]]:
         if entity not in self.graph:
             return []
 
@@ -294,7 +297,9 @@ class KnowledgeGraph:
 
         return "\n".join(snippets)
 
-    def detect_communities(self, resolution: float = 1.0, seed: int = 42) -> list[dict]:
+    def detect_communities(
+        self, resolution: float = 1.0, seed: int = 42
+    ) -> list[dict[str, Any]]:
         if self.graph.number_of_nodes() < 2:
             return []
 
@@ -319,7 +324,9 @@ class KnowledgeGraph:
             for node in members:
                 t = self.graph.nodes[node].get("type", "unknown")
                 types[t] = types.get(t, 0) + 1
-            dominant_type = max(types, key=types.get) if types else "unknown"
+            dominant_type = (
+                max(types.items(), key=lambda item: item[1])[0] if types else "unknown"
+            )
 
             label_parts = [str(n) for n in top_nodes[:3]]
             label = " / ".join(label_parts)
@@ -340,8 +347,8 @@ class KnowledgeGraph:
         return result
 
     def get_community_for_entity(
-        self, entity: str, communities: list[dict] | None = None
-    ) -> dict | None:
+        self, entity: str, communities: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any] | None:
         if communities is None:
             communities = self.detect_communities()
         for comm in communities:
@@ -349,7 +356,7 @@ class KnowledgeGraph:
                 return comm
         return None
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         last_updated = None
         for _, data in self.graph.nodes(data=True):
             candidate = data.get("last_updated")
@@ -364,7 +371,7 @@ class KnowledgeGraph:
             "last_updated": last_updated,
         }
 
-    def search_entities(self, query: str) -> list[dict]:
+    def search_entities(self, query: str) -> list[dict[str, Any]]:
         query_lower = query.lower().strip()
         if not query_lower:
             return []

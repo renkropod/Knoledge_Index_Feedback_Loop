@@ -281,4 +281,45 @@ class EntityExtractor:
         parsed = json.loads(raw_json)
         if not isinstance(parsed, dict):
             raise json.JSONDecodeError("JSON root must be object", raw_json, 0)
+        entities = parsed.get("entities", [])
+        relations = parsed.get("relations", [])
+
+        valid_entities: list[dict[str, Any]] = []
+        if isinstance(entities, list):
+            for entity in entities:
+                if not isinstance(entity, dict):
+                    continue
+                name = entity.get("name")
+                entity_type = entity.get("type", "unknown")
+                if not isinstance(name, str) or not name.strip():
+                    continue
+                if not isinstance(entity_type, str):
+                    continue
+                clean_entity = dict(entity)
+                clean_entity["name"] = name.strip()
+                clean_entity["type"] = entity_type
+                valid_entities.append(clean_entity)
+
+        valid_relations: list[dict[str, Any]] = []
+        if isinstance(relations, list):
+            for relation in relations:
+                if not isinstance(relation, dict):
+                    continue
+                source = relation.get("source")
+                target = relation.get("target")
+                relation_name = relation.get("relation")
+                if not isinstance(source, str) or not isinstance(target, str):
+                    continue
+                if not isinstance(relation_name, str):
+                    continue
+                clean_relation = dict(relation)
+                try:
+                    weight = float(clean_relation.get("weight", 1.0))
+                except (TypeError, ValueError):
+                    weight = 1.0
+                clean_relation["weight"] = max(0.0, min(weight, 1.0))
+                valid_relations.append(clean_relation)
+
+        parsed["entities"] = valid_entities
+        parsed["relations"] = valid_relations
         return parsed
