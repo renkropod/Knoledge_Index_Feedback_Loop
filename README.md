@@ -1,127 +1,211 @@
-# Knowledge Index 피드백 루프 시스템
+# GAKMS — Graph-Augmented Knowledge Memory System
 
-Graph-Augmented Knowledge Memory System (GAKMS) 기반의 자동 리서치 파이프라인입니다. 매일 웹 리서치를 수행하고, 결과를 문서화한 뒤 엔티티/관계 추출, 그래프/벡터/시간축 저장소 업데이트, 피드백 재인덱싱, 지식 현황 리포트 생성까지 한 번에 실행합니다.
+하루 2회 자동으로 기술 뉴스를 수집 → 한국어 Knowledge Base 구축 → LLM 인텔리전스 브리핑 생성 → Discord 전송하는 시스템.
 
-## 아키텍처 개요 (5-Layer)
+## 현황 (2026-03-17)
+
+| 항목 | 수치 |
+|---|---|
+| Knowledge Graph 엔티티 | **10,044** |
+| 관계 | **9,339** |
+| Temporal 사실 | **10,478** |
+| Vector 청크 | **5,327** |
+| 커뮤니티 (Louvain) | **2,182** |
+| 수집 문서 | **5,312** |
+| 인텔리전스 리포트 | **7** |
+| 유닛 테스트 | **31/31 pass** |
+| 데이터 소스 | HN, Lobsters, Dev.to, Reddit(5), GitHub Trending, RSS(3) |
+
+## 아키텍처
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Layer 1: Ingestion                                     │
-│  Cron 스케줄, 웹 리서치, 사용자 요청, 파일 업로드         │
-├─────────────────────────────────────────────────────────┤
-│  Layer 2: Knowledge Extraction                          │
-│  Entity Extraction -> Relation Mapping -> Deduplication │
-├─────────────────────────────────────────────────────────┤
-│  Layer 3: Hybrid Storage                                │
-│  Knowledge Graph | Vector Store | Temporal Fact Store   │
-├─────────────────────────────────────────────────────────┤
-│  Layer 4: Retrieval                                     │
-│  Dual-level 검색 + PPR 기반 랭킹 + 시간 가중치            │
-├─────────────────────────────────────────────────────────┤
-│  Layer 5: Generation + Feedback Loop                    │
-│  출력물 재인덱싱으로 지식 베이스를 지속 강화              │
-└─────────────────────────────────────────────────────────┘
+┌─ 데이터 수집 ──────────────────────────────────────────┐
+│  HN Algolia API · Lobsters · Dev.to · Reddit · GitHub  │
+│  Trending · TechCrunch/ArsTechnica/TheVerge RSS         │
+├─ 1차 스캔 ─────────────────────────────────────────────┤
+│  Entity/Relation Extraction (vLLM, 한국어)              │
+│  Source-Grounding Filter → Deduplication                │
+├─ Hybrid Storage ───────────────────────────────────────┤
+│  NetworkX KG │ ChromaDB Vectors │ Temporal JSONL        │
+│  Louvain Community Detection                            │
+├─ Retrieval ────────────────────────────────────────────┤
+│  Dual-Level (Low+High+Hybrid) + PPR Ranking             │
+│  Community Boost + Temporal Boost                       │
+├─ 2차 딥리드 ───────────────────────────────────────────┤
+│  상위 K/R 글 원문 Fetch → 근거수준 A/B/C/D 판정        │
+│  과거 리포트 3개 참조 → 반복 관측 판정                   │
+├─ Intelligence Report ──────────────────────────────────┤
+│  3축 점수 (T/K/R) · 확인/해석/가설 분리                 │
+│  5섹션: 필독글 → 요약 → 신호 → 딥리드 → 지식노트        │
+├─ 전송 ─────────────────────────────────────────────────┤
+│  Discord Webhook · Obsidian Vault · MD 파일             │
+├─ Feedback Loop ────────────────────────────────────────┤
+│  출력물 재인덱싱 → QualityScorer → ProvenanceTracker     │
+└────────────────────────────────────────────────────────┘
 ```
 
 ## 빠른 시작
 
-1. 의존성 설치
-
 ```bash
+# 1. venv 생성 + 의존성
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# 2. 환경변수 (vLLM 로컬 모델 사용 시)
+export VLLM_BASE_URL=http://localhost:8013/v1
+export VLLM_MODEL="Qwen/Qwen3.5-35B-A3B-FP8"
+
+# 3. KB 구축 (HN 한달치 + 다중 소스)
+python scripts/build_kb_hn_monthly.py
+
+# 4. 일일 파이프라인 실행
+python scripts/daily_news_pipeline.py --hours 12
+
+# 5. RAG 한국어 Q&A
+python scripts/ask.py "최근 AI 에이전트 트렌드"
+
+# 6. KB 대시보드
+python scripts/dashboard.py
 ```
 
-2. 환경변수 파일 준비
+## 주요 스크립트
 
-```bash
-cp .env.example .env
+| 스크립트 | 용도 |
+|---|---|
+| `scripts/daily_news_pipeline.py` | 하루 2회 자동 실행. 수집→추출→KB→인텔리전스 리포트→Discord |
+| `scripts/ask.py "질문"` | RAG 기반 한국어 Q&A (vLLM 답변 생성) |
+| `scripts/build_kb_hn_monthly.py` | HN 30일치 + Lobsters + Dev.to + RSS 대규모 KB 구축 |
+| `scripts/query.py "검색어"` | KB 검색 CLI (`--at-time`, `--entity-history`, `--communities`) |
+| `scripts/dashboard.py` | KB 성장 메트릭 대시보드 (`--json`) |
+| `scripts/benchmark.py` | 전 모듈 벤치마크 (Precision, Recall@k, MRR) |
+| `scripts/run_scheduler.py` | APScheduler 기반 자동 실행 |
+| `scripts/setup_cron.sh` | crontab / systemd timer 설정 (10AM/10PM KST) |
+
+## 인텔리전스 리포트 구조
+
+하루 2회 자동 생성되는 3층 구조 브리핑:
+
+```
+§0. 오늘 꼭 읽을 글 3개     ← K+R 최상위, 🔴정독/🟡스캔/⚪검증대기
+§1. 한 화면 요약             ← 3줄, 관측형 문장
+§2. 핵심 신호 5개            ← 확인/해석/미확인 분리, 근거강도 표기
+§3. 장문 딥리드              ← 원문 fetch 기반, 확인/해석/확장가설 3층
+§4. 지식 노트                ← 신규개념, 배경개념, 도구카드, 열린질문, 용어
+§5. 체크리스트               ← 질문 7개 + 키워드 10개
 ```
 
-`.env`에서 `ANTHROPIC_API_KEY`를 설정하세요.
-
-3. 일일 리서치 파이프라인 실행
-
-```bash
-python scripts/daily_research.py [topics...]
-```
-
-- 토픽을 전달하지 않으면 `config/settings.yaml`의 `research.default_topics`를 사용합니다.
+3축 점수:
+- **T**(트렌드): 커뮤니티 확산도
+- **K**(지식): 배움의 밀도
+- **R**(연구): 논문/시스템 이해 연결 가능성
 
 ## 프로젝트 구조
 
 ```
 research-agent/
 ├── config/
-│   ├── settings.py
-│   ├── settings.yaml
+│   ├── settings.py / settings.yaml
+│   ├── llm_client.py          # vLLM/Anthropic 공용 팩토리
+│   ├── notification.py        # Discord + Obsidian 연동
 │   └── prompts/
-├── ingestion/
-│   ├── scheduler.py
-│   ├── web_researcher.py
-│   └── document_parser.py
 ├── extraction/
-│   ├── entity_extractor.py
-│   ├── relation_mapper.py
+│   ├── entity_extractor.py    # LLM 추출 + source-grounding
+│   ├── relation_mapper.py     # co-occurrence + hierarchical
 │   └── deduplicator.py
 ├── storage/
-│   ├── graph_store.py
-│   ├── vector_store.py
-│   └── temporal_store.py
+│   ├── graph_store.py         # NetworkX + Louvain community
+│   ├── vector_store.py        # ChromaDB + lazy loading + batch
+│   ├── temporal_store.py      # append-only JSONL journal
+│   └── knowledge_cards.py     # 누적형 지식 카드
 ├── retrieval/
-│   ├── dual_retriever.py
-│   ├── ppr_ranker.py
+│   ├── dual_retriever.py      # low/high/hybrid + community boost
+│   ├── ppr_ranker.py          # PPR + max-normalization
 │   └── context_assembler.py
-├── feedback/
-│   ├── output_indexer.py
-│   └── quality_scorer.py
+├── ingestion/
+│   ├── web_researcher.py      # DuckDuckGo search + fetch
+│   ├── document_parser.py     # md/pdf/html/txt
+│   └── scheduler.py           # APScheduler
 ├── generation/
-│   ├── llm_generator.py
-│   └── provenance_tracker.py
-├── scripts/
-│   ├── daily_research.py
-│   └── knowledge_report.py
+│   ├── llm_generator.py       # vLLM/Anthropic 호환
+│   └── provenance_tracker.py  # bounded records
+├── feedback/
+│   ├── output_indexer.py      # 재인덱싱 + temporal facts
+│   └── quality_scorer.py
+├── scripts/                   # 위 표 참조
+├── tests/                     # 31 unit tests
 └── knowledge_base/
-    ├── documents/
-    ├── graph/
-    ├── vectors/
-    └── temporal/
+    ├── documents/             # 5,312 markdown files
+    ├── graph/kg.json          # 10K entities, 9K relations
+    ├── vectors/               # ChromaDB
+    ├── temporal/facts.jsonl   # 10K facts
+    ├── cards/                 # 누적형 지식 카드
+    └── reports/               # 인텔리전스 브리핑
+```
+
+## 설정
+
+### vLLM (로컬 LLM)
+```bash
+export VLLM_BASE_URL=http://localhost:8013/v1
+export VLLM_MODEL="Qwen/Qwen3.5-35B-A3B-FP8"
+```
+
+### Anthropic (클라우드)
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Discord 웹훅
+```yaml
+# config/settings.yaml
+notification:
+  discord_webhook_url: "https://discord.com/api/webhooks/..."
+```
+
+### Obsidian
+```yaml
+notification:
+  obsidian_vault_path: "/path/to/vault"
+  obsidian_folder: "Tech Trends"
+```
+
+### 자동 실행 (10AM/10PM KST)
+```bash
+bash scripts/setup_cron.sh
 ```
 
 ## 기술 스택
 
-| 구성 요소 | 기술 | 역할 |
-|---|---|---|
-| Knowledge Graph | NetworkX | 엔티티/관계 그래프 저장 및 업데이트 |
-| Vector Store | ChromaDB | 문서 임베딩 저장 및 유사도 검색 |
-| Embedding | BGE-M3 | 다국어 문서 임베딩 생성 |
-| LLM | Claude | 엔티티/관계 추출 |
-| Scheduler | APScheduler | 주기 실행 오케스트레이션 |
+| 구성 요소 | 기술 |
+|---|---|
+| Knowledge Graph | NetworkX + Louvain community detection |
+| Vector Store | ChromaDB (BGE-M3 embedding) |
+| LLM | vLLM (Qwen3.5-35B-A3B-FP8) / Anthropic Claude |
+| 수집 | Algolia HN API, Reddit JSON, GitHub HTML, RSS |
+| 스케줄러 | APScheduler / systemd timer |
+| 알림 | Discord Webhook, Obsidian Vault |
 
-## 핵심 기능
+## 성능
 
-- Self-reinforcing loop: 생성/축적된 결과를 다시 인덱싱해 다음 리서치 품질을 강화
-- Temporal-aware retrieval: 사실의 유효 기간을 관리해 시간 축 기반 질의 지원
-- Provenance tracking: 각 엔티티/관계/문서의 출처를 저장
-- Cross-research relation discovery: 독립 리서치 간 숨은 연관 관계 발견
-- Daily knowledge report: 엔티티/관계/문서/사실 변화량을 매일 보고
+| 지표 | 값 |
+|---|---|
+| Retrieval Precision@5 | **91%** |
+| Retrieval Latency | **0.06s** avg |
+| LLM Extraction | **~3s/doc** (Qwen3.5-35B-A3B-FP8) |
+| 일일 파이프라인 | **~5분** (277건 수집+추출+리포트) |
+| 벤치마크 | **39/39** (100%) Grade A |
 
-## 설정 가이드 (`config/settings.yaml`)
+## 개발 이력
 
-- `llm`
-  - `api_key_env`: API 키를 읽을 환경변수 이름
-  - `extraction_model`: 엔티티/관계 추출 모델
-  - `generation_model`: 생성 단계 모델
-- `storage`
-  - `graph_path`: 그래프 저장 경로
-  - `vector_path`: 벡터 저장 경로
-  - `temporal_path`: 시간축 사실 저장 경로
-- `embedding`
-  - `model_name`: 임베딩 모델 이름
-  - `device`: 임베딩 실행 디바이스
-- `research`
-  - `default_topics`: 기본 리서치 토픽 목록
-  - `max_sources`: 토픽별 최대 수집 소스 수
-  - `schedule_cron`: 스케줄러 크론 표현식
+| 날짜 | 내용 |
+|---|---|
+| Phase 1 | 코어 모듈 (extraction, storage, retrieval, ingestion, generation, feedback) |
+| Phase 2 | 성능 최적화 (VectorStore lazy loading 2.1x, parallel extraction, append-only temporal) |
+| Phase 3 | vLLM 연동, 24시간 KB 빌드, source-grounding filter (P@5 71%→91%) |
+| Phase 4 | 미구현 항목 완료 (recall@k/MRR, dashboard, QualityScorer/ProvenanceTracker 통합) |
+| Phase 5 | Community detection (Louvain), 한국어 KB 구축 (4,662건) |
+| Phase 6 | 일일 파이프라인 + RAG Q&A + Discord/Obsidian 연동 |
+| Phase 7 | 3층 인텔리전스 리포트 (T/K/R 3축, 확인/해석/가설 분리, 2-pass 딥리드) |
 
 ## 라이선스
 
