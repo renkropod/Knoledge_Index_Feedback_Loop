@@ -169,7 +169,7 @@ notification:
   obsidian_folder: "Tech Trends"
 ```
 
-### 자동 실행 (10AM/10PM KST)
+### 자동 실행 (9AM/9PM KST)
 ```bash
 bash scripts/setup_cron.sh
 ```

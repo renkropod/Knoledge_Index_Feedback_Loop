@@ -1,6 +1,6 @@
 #!/bin/bash
 # GAKMS Daily News Pipeline — 하루 2회 자동 실행 설정
-# 10:00 AM KST (01:00 UTC) + 10:00 PM KST (13:00 UTC)
+# 09:00 AM KST (00:00 UTC) + 09:00 PM KST (12:00 UTC)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -25,9 +25,9 @@ echo "=== Option 1: crontab ==="
 echo "Run: crontab -e"
 echo "Add these lines:"
 echo ""
-echo "# GAKMS Daily News Pipeline (10AM KST = 01:00 UTC, 10PM KST = 13:00 UTC)"
-echo "0 1 * * * $CRON_CMD"
-echo "0 13 * * * $CRON_CMD"
+echo "# GAKMS Daily News Pipeline (9AM KST = 00:00 UTC, 9PM KST = 12:00 UTC)"
+echo "0 0 * * * $CRON_CMD"
+echo "0 12 * * * $CRON_CMD"
 echo ""
 
 # Option 2: systemd (user level)
@@ -52,11 +52,11 @@ EOF
 
 cat > "$UNIT_DIR/gakms-news.timer" << EOF
 [Unit]
-Description=GAKMS News Timer — 10AM/10PM KST
+Description=GAKMS News Timer — 9AM/9PM KST
 
 [Timer]
-OnCalendar=*-*-* 01:00:00
-OnCalendar=*-*-* 13:00:00
+OnCalendar=*-*-* 00:00:00
+OnCalendar=*-*-* 12:00:00
 Persistent=true
 RandomizedDelaySec=300
 
